@@ -8,6 +8,7 @@ from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Sequential, Model
 from keras.optimizers import Adam
 
+from PIL import Image
 import matplotlib.pyplot as plt
 
 import sys
@@ -15,12 +16,14 @@ import sys
 import numpy as np
 
 class GAN():
-    def __init__(self):
-        self.img_rows = 28
-        self.img_cols = 28
-        self.channels = 1
+    def __init__(self, shape, save_path='images/'):
+        self.img_rows = shape[0]
+        self.img_cols = shape[1]
+        self.channels = shape[2]
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
         self.latent_dim = 100
+
+        self.save_path = save_path
 
         optimizer = Adam(0.0002, 0.5)
 
@@ -89,14 +92,11 @@ class GAN():
 
         return Model(img, validity)
 
-    def train(self, epochs, batch_size=128, sample_interval=50):
-
-        # Load the dataset
-        (X_train, _), (_, _) = mnist.load_data()
+    def train(self, X_train, epochs, batch_size=128, sample_interval=50):
 
         # Rescale -1 to 1
         X_train = X_train / 127.5 - 1.
-        X_train = np.expand_dims(X_train, axis=3)
+        #X_train = np.expand_dims(X_train, axis=3)
 
         # Adversarial ground truths
         valid = np.ones((batch_size, 1))
@@ -150,14 +150,16 @@ class GAN():
         cnt = 0
         for i in range(r):
             for j in range(c):
-                axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')
+                #axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGBA'))   # color
+                axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("images/%d.png" % epoch)
+        fig.savefig(self.save_path + "%d.png" % epoch)
         plt.close()
 
 
 if __name__ == '__main__':
     gan = GAN()
-    gan.train(epochs=30000, batch_size=32, sample_interval=200)
+    (X_train,_), (_,_) = mnist.load_data()
+    gan.train(X_train=X_train, epochs=30000, batch_size=32, sample_interval=200)
 
