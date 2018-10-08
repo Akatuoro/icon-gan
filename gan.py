@@ -102,6 +102,10 @@ class GAN():
         valid = np.ones((batch_size, 1))
         fake = np.zeros((batch_size, 1))
 
+        d_losses = []
+        d_acc = []
+        g_losses = []
+
         for epoch in range(epochs):
 
             # ---------------------
@@ -133,10 +137,15 @@ class GAN():
 
             # Plot the progress
             print ("%d [D loss: %f, acc.: %.2f%%] [G loss: %f]" % (epoch, d_loss[0], 100*d_loss[1], g_loss))
+            d_losses.append(d_loss[0])
+            d_acc.append(100*d_loss[1])
+            g_losses.append(g_loss)
 
             # If at save interval => save generated image samples
             if epoch % sample_interval == 0:
                 self.sample_images(epoch)
+
+        return d_losses, d_acc, g_losses
 
     def sample_images(self, epoch):
         r, c = 5, 5
@@ -150,8 +159,12 @@ class GAN():
         cnt = 0
         for i in range(r):
             for j in range(c):
-                #axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGBA'))   # color
-                axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
+                if gen_imgs.shape[3] < 3:
+                    axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
+                elif gen_imgs.shape[3] == 3:
+                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGB'))   # color
+                elif gen_imgs.shape[3] == 4:
+                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGBA'))   # color with alpha
                 axs[i,j].axis('off')
                 cnt += 1
         fig.savefig(self.save_path + "%d.png" % epoch)
