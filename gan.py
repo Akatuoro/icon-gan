@@ -161,10 +161,8 @@ class GAN():
             for j in range(c):
                 if gen_imgs.shape[3] < 3:
                     axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
-                elif gen_imgs.shape[3] == 3:
-                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGB'))   # color
-                elif gen_imgs.shape[3] == 4:
-                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGBA'))   # color with alpha
+                else:
+                    axs[i,j].imshow(gen_imgs[cnt])   # color with or without alpha
                 axs[i,j].axis('off')
                 cnt += 1
         fig.savefig(self.save_path + "%d.png" % epoch)

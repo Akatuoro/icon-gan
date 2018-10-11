@@ -93,14 +93,14 @@ class GAN():
 
         model = Sequential()
 
-        model.add(Conv2D(16, kernel_size=3, strides=2, input_shape=self.img_shape, padding="same"))
+        model.add(Conv2D(16, kernel_size=3, strides=1, input_shape=self.img_shape, padding="same"))
+        model.add(BatchNormalization())
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
         model.add(Conv2D(32, kernel_size=3, strides=2, padding="same"))
         #model.add(ZeroPadding2D(padding=((0,1),(0,1))))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
-        model.add(BatchNormalization(momentum=0.8))
         model.add(Conv2D(64, kernel_size=3, strides=2, padding="same"))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
@@ -189,10 +189,8 @@ class GAN():
             for j in range(c):
                 if gen_imgs.shape[3] < 3:
                     axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
-                elif gen_imgs.shape[3] == 3:
-                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGB'))   # color
-                elif gen_imgs.shape[3] == 4:
-                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGBA'))   # color with alpha
+                else:
+                    axs[i,j].imshow(gen_imgs[cnt])   # color with or without alpha
                 axs[i,j].axis('off')
                 cnt += 1
         fig.savefig(self.save_path + "%d.png" % epoch)

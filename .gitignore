@@ -4,6 +4,7 @@ __pycache__
 *.ico
 *.zip
 convertlist.txt
+*.h5
 
 
 # Created by https://www.gitignore.io/api/node,jupyternotebook

@@ -4,11 +4,12 @@ import scipy
 from keras.datasets import mnist
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout
 from keras.layers import BatchNormalization, Activation, ZeroPadding2D
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import UpSampling2D, Conv2D
+from keras.layers.advanced_activations import LeakyReLU, PReLU
+from keras.layers.convolutional import UpSampling2D, Conv2D, Conv2DTranspose
 from keras.models import Sequential, Model
 from keras.optimizers import Adam
 
+from PIL import Image
 import matplotlib.pyplot as plt
 
 import sys
@@ -176,6 +177,9 @@ class COGAN():
             # If at save interval => save generated image samples
             if epoch % sample_interval == 0:
                 self.sample_images(epoch)
+                self.d1.save('d1_weights.h5')
+                self.d2.save('d2_weights.h5')
+                self.combined.save('g_weights.h5')
 
         return d_losses, d_acc, g_losses
 
@@ -196,43 +200,56 @@ class COGAN():
             for j in range(c):
                 if gen_imgs.shape[3] < 3:
                     axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
-                elif gen_imgs.shape[3] == 3:
-                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGB'))   # color
-                elif gen_imgs.shape[3] == 4:
-                    axs[i,j].imshow(Image.fromarray(gen_imgs[cnt], 'RGBA'))   # color with alpha
+                else:
+                    axs[i,j].imshow(gen_imgs[cnt])   # color with or without alpha
                 axs[i,j].axis('off')
                 cnt += 1
         fig.savefig(self.save_path + "%d.png" % epoch)
         plt.close()
 
 
-def COGAN_MOD(COGAN):
+class COGAN_MOD(COGAN):
+#    def __init__(self, shape, save_path='images/'):
+#        COGAN.__init__(self, shape, save_path)
+
     def build_generators(self):
 
         # Shared weights between generators
         model = Sequential()
-        model.add(Dense(256, input_dim=self.latent_dim))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(512))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
+        model.add(Reshape((1,1,self.latent_dim), input_shape=(self.latent_dim,)))
+        model.add(Conv2DTranspose(1024, kernel_size=4, strides=1, padding='same'))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2DTranspose(512, kernel_size=4, strides=2, padding='same'))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2DTranspose(256, kernel_size=4, strides=2, padding='same'))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2DTranspose(128, kernel_size=4, strides=2, padding='same'))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2DTranspose(64, kernel_size=4, strides=2, padding='same'))
+        model.add(PReLU())
+        model.add(BatchNormalization())
 
         noise = Input(shape=(self.latent_dim,))
         feature_repr = model(noise)
 
         # Generator 1
-        g1 = Dense(1024)(feature_repr)
-        g1 = LeakyReLU(alpha=0.2)(g1)
-        g1 = BatchNormalization(momentum=0.8)(g1)
-        g1 = Dense(np.prod(self.img_shape), activation='tanh')(g1)
+        g1 = Conv2DTranspose(32, kernel_size=3, strides=2, padding='same')(feature_repr)
+        g1 = PReLU()(g1)
+        g1 = BatchNormalization()(g1)
+        g1 = Conv2DTranspose(self.channels, kernel_size=3, strides=1, padding='same')(g1)
+        g1 = Activation('tanh')(g1)
         img1 = Reshape(self.img_shape)(g1)
 
         # Generator 2
-        g2 = Dense(1024)(feature_repr)
-        g2 = LeakyReLU(alpha=0.2)(g2)
-        g2 = BatchNormalization(momentum=0.8)(g2)
-        g2 = Dense(np.prod(self.img_shape), activation='tanh')(g2)
+        g2 = Conv2DTranspose(32, kernel_size=3, strides=2, padding='same')(feature_repr)
+        g2 = PReLU()(g2)
+        g2 = BatchNormalization()(g2)
+        g2 = Conv2DTranspose(self.channels, kernel_size=3, strides=1, padding='same')(g2)
+        g2 = Activation('sigmoid')(g2)
         img2 = Reshape(self.img_shape)(g2)
 
         model.summary()
@@ -246,19 +263,39 @@ def COGAN_MOD(COGAN):
 
         # Shared discriminator layers
         model = Sequential()
-        model.add(Flatten(input_shape=self.img_shape))
-        model.add(Dense(512))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dense(256))
-        model.add(LeakyReLU(alpha=0.2))
-
-        img1_embedding = model(img1)
-        img2_embedding = model(img2)
+        model.add(Conv2D(128, kernel_size=5, strides=2, padding="same"))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2D(256, kernel_size=5, strides=1, padding="same"))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2D(512, kernel_size=5, strides=1, padding="same"))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Conv2D(1024, kernel_size=5, strides=1, padding="same"))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Flatten())
+        model.add(Dense(2048))
+        model.add(PReLU())
+        model.add(BatchNormalization())
+        model.add(Dense(1, activation='sigmoid'))
 
         # Discriminator 1
-        validity1 = Dense(1, activation='sigmoid')(img1_embedding)
+        d1 = Conv2D(32, kernel_size=5, strides=2, padding="same")(img1)
+        d1 = PReLU()(d1)
+        d1 = BatchNormalization()(d1)
+        d1 = Conv2D(64, kernel_size=5, strides=2, padding="same")(d1)
+        d1 = PReLU()(d1)
+        d1 = BatchNormalization()(d1)
+        validity1 = model(d1)
         # Discriminator 2
-        validity2 = Dense(1, activation='sigmoid')(img2_embedding)
+        d2 = Conv2D(32, kernel_size=5, strides=2, padding="same")(img2)
+        d2 = PReLU()(d2)
+        d2 = BatchNormalization()(d2)
+        d2 = Conv2D(64, kernel_size=5, strides=2, padding="same")(d2)
+        d2 = PReLU()(d2)
+        validity2 = model(d2)
 
         return Model(img1, validity1), Model(img2, validity2)
 

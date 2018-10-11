@@ -48,17 +48,26 @@ def load_data(path, mode):
     return imgs
 
 
-def interpolation(gan, r, c, steps):
-    r_vector = np.random.normal(0,1,(r * int(c/2), 100))
-    m_vector = np.random.normal(0,1,(r * int(c/2), 100))
+def interpolation(gan, n, steps):
+    if hasattr(gan, 'g1') and hasattr(gan, 'g2'):
+        n = n/2
+
+    r_vector = np.random.normal(0,1,(n, 100))
+    m_vector = np.random.normal(0,1,(n, 100))
     interpol_vector = [r_vector + t/(1 * steps) * m_vector for t in range(0, int(steps)) ]
 
-    gen_imgs1 = [gan.g1.predict(v) for v in interpol_vector]
-    gen_imgs2 = [gan.g2.predict(v) for v in interpol_vector]
-    gen_imgs = [np.concatenate([gen_imgs1[i], gen_imgs2[i]]) for i in range(0, int(steps))]
+    if hasattr(gan, 'g1') and hasattr(gan, 'g2'):
+        gen_imgs1 = [gan.g1.predict(v) for v in interpol_vector]
+        gen_imgs2 = [gan.g2.predict(v) for v in interpol_vector]
+        gen_imgs = [np.concatenate([gen_imgs1[i], gen_imgs2[i]]) for i in range(0, int(steps))]
+    else:
+        gen_imgs = [gan.generator.predict(v) for v in interpol_vector]
+
+    gen_imgs = [0.5 * imgs + 0.5 for imgs in gen_imgs]
     return gen_imgs
 
-def animation(imgs, r, c, steps):
+
+def animation(imgs, mode, r, c, steps):
     import matplotlib.animation
     
     fig, axs = plt.subplots(r, c)
@@ -75,7 +84,10 @@ def animation(imgs, r, c, steps):
         cnt = 0
         for i in range(r):
             for j in range(c):
-                axs[i,j].imshow(imgs[t][cnt, :,:,0], cmap='gray')
+                if mode < 3:
+                    axs[i,j].imshow(imgs[t][cnt, :,:,0], cmap='gray')
+                else:
+                    axs[i,j].imshow(imgs[t][cnt])
                 cnt += 1
 
     ani = matplotlib.animation.FuncAnimation(fig, animate, frames=steps)
@@ -91,6 +103,6 @@ def random_samples(imgs, mode):
             if mode == 1:
                 plt.imshow(img[:,:,0], cmap='gray') # if grayscale, the shape has to be (w,h)
             else:
-                plt.imshow(Image.fromarray(img))
+                plt.imshow(img)
         except Exception:
             print('Failed to display img ' + str(j))
