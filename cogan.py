@@ -129,6 +129,10 @@ class COGAN():
         valid = np.ones((batch_size, 1))
         fake = np.zeros((batch_size, 1))
 
+        d_losses = []
+        d_acc = []
+        g_losses = []
+
         for epoch in range(epochs):
 
             # ----------------------
@@ -165,10 +169,15 @@ class COGAN():
             # Plot the progress
             print ("%d [D1 loss: %f, acc.: %.2f%%] [D2 loss: %f, acc.: %.2f%%] [G loss: %f]" \
                 % (epoch, d1_loss[0], 100*d1_loss[1], d2_loss[0], 100*d2_loss[1], g_loss[0]))
+            d_losses.append(d1_loss[0])
+            d_acc.append(100*d1_loss[1])
+            g_losses.append(g_loss)
 
             # If at save interval => save generated image samples
             if epoch % sample_interval == 0:
                 self.sample_images(epoch)
+
+        return d_losses, d_acc, g_losses
 
     def sample_images(self, epoch):
         r, c = 4, 4
