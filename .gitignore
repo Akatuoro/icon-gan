@@ -2,6 +2,7 @@
 __pycache__
 *.png
 *.ico
+*.gif
 *.zip
 convertlist.txt
 *.h5
