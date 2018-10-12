@@ -25,12 +25,13 @@ class GAN():
 
         self.save_path = save_path
 
-        optimizer = Adam(0.0002, 0.5)
+        optimizer = Adam(0.0008, 0.5)
+        d_optimizer = Adam(0.0002, 0.5)
 
         # Build and compile the discriminator
         self.discriminator = self.build_discriminator()
         self.discriminator.compile(loss='binary_crossentropy',
-            optimizer=optimizer,
+            optimizer=d_optimizer,
             metrics=['accuracy'])
 
         # Build the generator

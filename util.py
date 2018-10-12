@@ -67,7 +67,7 @@ def interpolation(gan, n, steps):
     return gen_imgs
 
 
-def animation(imgs, mode, r, c, steps):
+def animation(imgs, mode, r, c, steps, interval=50):
     import matplotlib.animation
     
     fig, axs = plt.subplots(r, c)
@@ -90,7 +90,7 @@ def animation(imgs, mode, r, c, steps):
                     axs[i,j].imshow(imgs[t][cnt])
                 cnt += 1
 
-    ani = matplotlib.animation.FuncAnimation(fig, animate, frames=steps)
+    ani = matplotlib.animation.FuncAnimation(fig, animate, frames=steps, interval=interval)
     return ani
 
 def random_samples(imgs, mode):
