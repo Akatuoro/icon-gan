@@ -11,8 +11,9 @@ from keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAv
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Sequential, Model
-from keras.optimizers import RMSprop
-from functools import partial
+from keras.optimizers import RMSprop, Adam
+
+from libs.blocks import ResidualBlock, OptimizedResBlockDisc1
 
 import keras.backend as K
 
@@ -21,6 +22,7 @@ import matplotlib.pyplot as plt
 import sys
 
 import numpy as np
+
 
 class RandomWeightedAverage(_Merge):
     """Provides a (random) weighted average between real and generated image samples"""
@@ -40,7 +42,7 @@ class WGANGP():
 
         # Following parameter and optimizer set as recommended in paper
         self.n_critic = 5
-        optimizer = RMSprop(lr=0.00005)
+        optimizer = Adam(lr=2e-4, beta_1=0., beta_2=0.9, decay=1/100000)
 
         # Build the generator and critic
         self.generator = self.build_generator()
@@ -129,7 +131,7 @@ class WGANGP():
 
         noise = Input(shape=(self.latent_dim,))
 
-        x = Dense(128 * 4 * 4, activation="relu")(noise)
+        x = Dense(128 * 4 * 4)(noise)
         x = Reshape((4, 4, 128))(x)
         x = ResidualBlock(128, 3, 'up')(x)
         x = ResidualBlock(128, 3, 'up')(x)
@@ -232,59 +234,6 @@ class WGANGP():
                 cnt += 1
         fig.savefig(self.save_path + "%d.png" % epoch)
         plt.close()
-
-
-def ResidualBlock(output_dim, kernel_size, resample=None):
-    
-    conv = lambda x: Conv2D(output_dim, kernel_size=kernel_size, padding='same')(x)
-    conv_same = lambda x: Conv2D(output_dim, kernel_size=1, padding='same')(x)
-    up = lambda x: UpSampling2D()(x)
-    down = lambda x: AveragePooling2D()(x)
-    
-    if resample=='down':
-        conv_shortcut = lambda x: down(conv_same(x))
-        conv_1        = conv
-        conv_2        = lambda x: down(conv(x))
-    elif resample=='up':
-        conv_shortcut = lambda x: up(conv_same(x))
-        conv_1        = lambda x: up(conv(x))
-        conv_2        = conv
-    elif resample==None:
-        conv_shortcut = lambda x: x # Identity skip-connection
-        conv_1        = conv
-        conv_2        = conv
-    else:
-        raise Exception('invalid resample value')
-
-    def build(x):
-        shortcut = conv_shortcut(x)
-        
-        o = BatchNormalization()(x)
-        o = Activation("relu")(x)
-        o = conv_1(o)
-        o = BatchNormalization()(o)
-        o = Activation("relu")(o)
-        output = conv_2(o)
-        
-        return Add()([shortcut, output])
-    
-    return build
-
-def OptimizedResBlockDisc1(output_dim, kernel_size=3):
-    conv_shortcut = lambda x: Conv2D(output_dim, kernel_size=1, padding="same")(AveragePooling2D()(x))
-    conv_1 = lambda x: Conv2D(output_dim, kernel_size=kernel_size, padding="same")(x)
-    conv_2 = lambda x: AveragePooling2D()(Conv2D(output_dim, kernel_size=kernel_size, padding="same")(x))
-    
-    def build(x):
-        shortcut = conv_shortcut(x)
-        
-        o = conv_1(x)
-        o = Activation("relu")(o)
-        output = conv_2(o)
-        
-        return Add()([shortcut, output])
-    
-    return build
 
 
 if __name__ == '__main__':
