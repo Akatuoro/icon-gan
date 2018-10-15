@@ -42,7 +42,7 @@ class WGANGP(GAN):
 
     def compile(self):
         # Following parameter and optimizer set as recommended in paper
-        self.n_critic = 1
+        self.n_critic = 5
         optimizer = Adam(lr=2e-4, beta_1=0., beta_2=0.9, decay=1/100000)
 
         # Build the generator and critic
