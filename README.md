@@ -1,5 +1,7 @@
 
-# Icon Generator
+# Icon Generator ![icon](/generated_icon.png)
+
+
 
 ### How to use:
 
