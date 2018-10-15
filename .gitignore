@@ -9,6 +9,10 @@ convertlist.txt
 *.h5
 *.hdf5
 
+# Allow
+!generated_icon.png
+
+
 
 # Created by https://www.gitignore.io/api/node,jupyternotebook
 
