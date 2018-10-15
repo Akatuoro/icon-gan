@@ -1,5 +1,5 @@
 
-# &nbsp; ![icon](/generated_icon.png) &nbsp; Icon Generator
+# &nbsp; ![icon](/generated_icon.png) Icon Generator
 
 
 
@@ -18,17 +18,19 @@ Alternatively, icons can be downloaded seperately and loaded from a folder, the 
 
 #### Pre-Trained Weights
 
+Weights for the results of the improved convolutional GAN and the ResNet WGAN can be downloaded here:
 
+https://drive.google.com/open?id=1FFKdxTGTTUdLZQOeoWkqFb9AegGm3dSF
 
 
 ### Commands for the Tensorflow Docker Container 
 
 Command for jupyter docker container with gpu support and connected drive. The below command assumes, that the `icon-gan` repository is placed in the users home directory, but could be altered by replacing `~/icon-gan` with `<dir>/icon-gan`.
-'''
+```
 docker run -v ~/icon-gan:/notebooks/icon-gan -it -p 8888:8888 tensorflow/tensorflow:latest-py3
-'''
+```
 
 With Nvidia GPU enabled, recommended for training.
-'''
+```
 docker run --runtime=nvidia -v ~/icon-gan:/notebooks/icon-gan -it -p 8888:8888 tensorflow/tensorflow:latest-gpu-py3
-'''
+```
