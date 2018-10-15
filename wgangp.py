@@ -1,6 +1,9 @@
 # Large amount of credit goes to:
-# https://github.com/keras-team/keras-contrib/blob/master/examples/improved_wgan.py
+# https://github.com/eriklindernoren/Keras-GAN/blob/master/wgan_gp/wgan_gp.py
 # which I've used as a reference for this implementation
+# 
+# Hyperparameters are modeled after:
+# https://github.com/alex-sage/logo-gen/blob/master/wgan/logo_wgan.py
 
 from __future__ import print_function, division
 
@@ -12,8 +15,11 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Sequential, Model
 from keras.optimizers import RMSprop, Adam
+from functools import partial
 
 from libs.blocks import ResidualBlock, OptimizedResBlockDisc1
+from libs.architectures import build_generator, build_discriminator
+from gan import GAN
 
 import keras.backend as K
 
@@ -30,23 +36,18 @@ class RandomWeightedAverage(_Merge):
         alpha = K.random_uniform((32, 1, 1, 1))
         return (alpha * inputs[0]) + ((1 - alpha) * inputs[1])
 
-class WGANGP():
-    def __init__(self, shape, save_path='images/'):
-        self.img_rows = shape[0]
-        self.img_cols = shape[1]
-        self.channels = shape[2]
-        self.img_shape = (self.img_rows, self.img_cols, self.channels)
-        self.latent_dim = 100
+class WGANGP(GAN):
+    def __init__(self, *args, **kwargs):
+        GAN.__init__(self, *args, **kwargs)
 
-        self.save_path = save_path
-
+    def compile(self):
         # Following parameter and optimizer set as recommended in paper
-        self.n_critic = 5
+        self.n_critic = 1
         optimizer = Adam(lr=2e-4, beta_1=0., beta_2=0.9, decay=1/100000)
 
         # Build the generator and critic
-        self.generator = self.build_generator()
-        self.critic = self.build_critic()
+        self.generator = build_generator(self.architecture, self.latent_dim, self.img_shape)
+        self.critic = build_discriminator(self.architecture, self.img_shape)
 
         #-------------------------------
         # Construct Computational Graph
@@ -127,42 +128,6 @@ class WGANGP():
     def wasserstein_loss(self, y_true, y_pred):
         return K.mean(y_true * y_pred)
 
-    def build_generator(self):
-
-        noise = Input(shape=(self.latent_dim,))
-
-        x = Dense(128 * 4 * 4)(noise)
-        x = Reshape((4, 4, 128))(x)
-        x = ResidualBlock(128, 3, 'up')(x)
-        x = ResidualBlock(128, 3, 'up')(x)
-        x = ResidualBlock(128, 3, 'up')(x)
-        x = BatchNormalization()(x)
-        x = Activation("relu")(x)
-        x = Conv2D(self.channels, kernel_size=3, padding="same")(x)
-        img = Activation("tanh")(x)
-
-
-        model = Model(noise, img)
-        model.summary()
-
-        return model
-
-    def build_critic(self):
-        img = Input(shape=self.img_shape)
-        
-        x = Reshape(self.img_shape)(img)
-        x = OptimizedResBlockDisc1(128)(x)
-        x = ResidualBlock(128, 3, resample='down')(x)
-        x = ResidualBlock(128, 3, resample=None)(x)
-        x = ResidualBlock(128, 3, resample=None)(x)
-        x = Activation("relu")(x)
-        x = GlobalAveragePooling2D()(x)
-        validity = Dense(1)(x)
-
-        model = Model(img, validity)
-        model.summary()
-        
-        return model
 
     def train(self, X_train, epochs, batch_size, sample_interval=50):
 
@@ -213,27 +178,6 @@ class WGANGP():
                 self.sample_images(epoch)
         
         return d_losses, d_acc, g_losses
-
-    def sample_images(self, epoch):
-        r, c = 5, 5
-        noise = np.random.normal(0, 1, (r * c, self.latent_dim))
-        gen_imgs = self.generator.predict(noise)
-
-        # Rescale images 0 - 1
-        gen_imgs = 0.5 * gen_imgs + 0.5
-
-        fig, axs = plt.subplots(r, c)
-        cnt = 0
-        for i in range(r):
-            for j in range(c):
-                if gen_imgs.shape[3] < 3:
-                    axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')      # grayscale
-                else:
-                    axs[i,j].imshow(gen_imgs[cnt])   # color with or without alpha
-                axs[i,j].axis('off')
-                cnt += 1
-        fig.savefig(self.save_path + "%d.png" % epoch)
-        plt.close()
 
 
 if __name__ == '__main__':

@@ -2,6 +2,7 @@ from importlib import reload
 from IPython.display import clear_output
 from os import walk
 from PIL import Image
+import h5py
 import random
 import numpy as np
 import tensorflow as tf
@@ -16,7 +17,14 @@ import matplotlib.gridspec as gridspec
 #       2 - grayscale with alpha
 #       3 - rgb
 #       4 - rgb with alpha
-def load_data(path, mode):
+def load_data(path, desired_shape=(32, 32, 3)):
+    if path.find('.hdf5', -5) > -1:
+        with h5py.File(path, 'r') as f:
+            data = f[list(f.keys())[0]][()]
+
+        s = data.shape
+        return data.transpose((0,2,3,1)), (s[2], s[3], s[1])
+
     f = []
     for (dirpath, dirnames, filenames) in walk(path):
         f.extend(filenames)
@@ -24,6 +32,8 @@ def load_data(path, mode):
     
     imgs = []
     couldnt_load = []
+
+    mode = desired_shape[2]
     for file in f:
         try:
             img = Image.open(path + file)
@@ -45,7 +55,11 @@ def load_data(path, mode):
         except Exception:
             couldnt_load.append(file)
     
-    return imgs
+    print('num images before: ' + str(len(imgs)))
+    imgs = [img for img in imgs if img.shape == desired_shape]
+    print('num images after: ' + str(len(imgs)))
+
+    return np.asarray(imgs), desired_shape
 
 
 def interpolation(gan, n, steps):
@@ -93,16 +107,24 @@ def animation(imgs, mode, r, c, steps, interval=50):
     ani = matplotlib.animation.FuncAnimation(fig, animate, frames=steps, interval=interval)
     return ani
 
-def random_samples(imgs, mode):
-    for i in range(1,25):
-        plt.subplot(4, 6, i)
+def random_samples(imgs, mode, r=4, c=6):
+    if isinstance(imgs, list):
+        j = np.random.randint(0, len(imgs)-1, size=r*c+1)
+        plot([imgs[k] for k in j], mode, r, c)
+    elif isinstance(imgs, np.ndarray):
+        j = np.random.randint(0, imgs.shape[0]-1, size=r*c+1)
+        plot(imgs[j], mode, r, c)
+
+def plot(imgs, mode, r=4, c=6):
+    for i in range(1,r*c+1):
+        plt.subplot(r, c, i)
         plt.axis('off')
-        j = np.random.randint(0, len(imgs)-1)
         try:
-            img = imgs[j]
+            img = imgs[i]
             if mode == 1:
                 plt.imshow(img[:,:,0], cmap='gray') # if grayscale, the shape has to be (w,h)
             else:
                 plt.imshow(img)
         except Exception:
-            print('Failed to display img ' + str(j))
+            print('Failed to display img ' + str(i))
+

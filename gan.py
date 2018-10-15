@@ -1,3 +1,7 @@
+# Large amount of credit goes to:
+# https://github.com/eriklindernoren/Keras-GAN/blob/master/gan/gan.py
+# which I've used as a reference for this implementation
+
 from __future__ import print_function, division
 
 from keras.datasets import mnist
@@ -7,6 +11,7 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Sequential, Model
 from keras.optimizers import Adam
+from libs.architectures import build_generator, build_discriminator
 
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -16,7 +21,7 @@ import sys
 import numpy as np
 
 class GAN():
-    def __init__(self, shape, save_path='images/'):
+    def __init__(self, shape, architecture='dense', save_path='images/'):
         self.img_rows = shape[0]
         self.img_cols = shape[1]
         self.channels = shape[2]
@@ -25,16 +30,20 @@ class GAN():
 
         self.save_path = save_path
 
+        self.architecture = architecture
+        self.compile()
+
+    def compile(self):
         optimizer = Adam(0.0002, 0.5)
 
         # Build and compile the discriminator
-        self.discriminator = self.build_discriminator()
+        self.discriminator = build_discriminator(self.architecture, self.img_shape)
         self.discriminator.compile(loss='binary_crossentropy',
             optimizer=optimizer,
             metrics=['accuracy'])
 
         # Build the generator
-        self.generator = self.build_generator()
+        self.generator = build_generator(self.architecture, self.latent_dim, self.img_shape)
 
         # The generator takes noise as input and generates imgs
         z = Input(shape=(self.latent_dim,))
@@ -50,47 +59,6 @@ class GAN():
         # Trains the generator to fool the discriminator
         self.combined = Model(z, validity)
         self.combined.compile(loss='binary_crossentropy', optimizer=optimizer)
-
-
-    def build_generator(self):
-
-        model = Sequential()
-
-        model.add(Dense(256, input_dim=self.latent_dim))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(512))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(1024))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(np.prod(self.img_shape), activation='tanh'))
-        model.add(Reshape(self.img_shape))
-
-        model.summary()
-
-        noise = Input(shape=(self.latent_dim,))
-        img = model(noise)
-
-        return Model(noise, img)
-
-    def build_discriminator(self):
-
-        model = Sequential()
-
-        model.add(Flatten(input_shape=self.img_shape))
-        model.add(Dense(512))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dense(256))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dense(1, activation='sigmoid'))
-        model.summary()
-
-        img = Input(shape=self.img_shape)
-        validity = model(img)
-
-        return Model(img, validity)
 
     def train(self, X_train, epochs, batch_size=128, sample_interval=50):
 
@@ -170,7 +138,7 @@ class GAN():
 
 
 if __name__ == '__main__':
-    gan = GAN()
     (X_train,_), (_,_) = mnist.load_data()
+    gan = GAN(shape=X_train[0].shape)
     gan.train(X_train=X_train, epochs=30000, batch_size=32, sample_interval=200)
 
