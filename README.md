@@ -1,5 +1,5 @@
 
-# Icon Generator ![icon](/generated_icon.png)
+# &nbsp; ![icon](/generated_icon.png) &nbsp; Icon Generator
 
 
 
