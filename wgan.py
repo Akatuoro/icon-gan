@@ -93,7 +93,6 @@ class WGAN():
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
         model.add(Conv2D(32, kernel_size=3, strides=2, padding="same"))
-        #model.add(ZeroPadding2D(padding=((0,1),(0,1))))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
@@ -107,7 +106,6 @@ class WGAN():
         model.add(Dropout(0.25))
         model.add(Flatten())
         model.add(Dense(1))
-
         model.summary()
 
         img = Input(shape=self.img_shape)
