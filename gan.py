@@ -136,6 +136,14 @@ class GAN():
         fig.savefig(self.save_path + "%d.png" % epoch)
         plt.close()
 
+    def load_weights(self, g_weights, d_weights):
+        self.generator.load_weights(g_weights)
+        self.discriminator.load_weights(d_weights)
+
+    def save_weights(self, g_weights, d_weights):
+        self.generator.save_weights(g_weights)
+        self.discriminator.save_weights(d_weights)
+
 
 if __name__ == '__main__':
     (X_train,_), (_,_) = mnist.load_data()

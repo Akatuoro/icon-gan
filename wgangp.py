@@ -179,6 +179,14 @@ class WGANGP(GAN):
         
         return d_losses, d_acc, g_losses
 
+    def load_weights(self, g_weights, d_weights):
+        self.generator_model.load_weights(g_weights)
+        self.critic_model.load_weights(d_weights)
+
+    def save_weights(self, g_weights, d_weights):
+        self.generator_model.save_weights(g_weights)
+        self.critic_model.save_weights(d_weights)
+
 
 if __name__ == '__main__':
     wgan = WGANGP()
