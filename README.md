@@ -25,12 +25,12 @@ https://drive.google.com/open?id=1FFKdxTGTTUdLZQOeoWkqFb9AegGm3dSF
 
 ### Commands for the Tensorflow Docker Container 
 
-Command for jupyter docker container with connected drive `~/icon-gan`:
+Command for jupyter docker container with current directory as connected drive:
 ```
-docker run -v ~/icon-gan:/notebooks/icon-gan -it -p 8888:8888 tensorflow/tensorflow:latest-py3
+docker run -v $(pwd):/tf/icon-gan -it --rm -p 8888:8888 tensorflow/tensorflow:latest-py3-jupyter
 ```
 
 Command with Nvidia GPU enabled, recommended for training:
 ```
-docker run --runtime=nvidia -v ~/icon-gan:/notebooks/icon-gan -it -p 8888:8888 tensorflow/tensorflow:latest-gpu-py3
+docker run --runtime=nvidia -v $(pwd):/tf/icon-gan -it --rm -p 8888:8888 tensorflow/tensorflow:latest-gpu-py3-jupyter
 ```
