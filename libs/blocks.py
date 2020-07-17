@@ -1,8 +1,8 @@
 # Blocks intended to work with the Keras functional API
 
-from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Add, Lambda
-from keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAveragePooling2D, AveragePooling2D
-from keras.layers.convolutional import UpSampling2D, Conv2D
+from tensorflow.keras.layers import Input, Dense, Reshape, Flatten, Dropout, Add, Lambda
+from tensorflow.keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAveragePooling2D, AveragePooling2D
+from tensorflow.keras.layers import UpSampling2D, Conv2D
 
 def ResidualBlock(output_dim, kernel_size, resample=None):
     

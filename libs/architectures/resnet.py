@@ -1,8 +1,8 @@
-from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Add, Lambda
-from keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAveragePooling2D, AveragePooling2D
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import UpSampling2D, Conv2D
-from keras.models import Sequential, Model
+from tensorflow.keras.layers import Input, Dense, Reshape, Flatten, Dropout, Add, Lambda
+from tensorflow.keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAveragePooling2D, AveragePooling2D
+from tensorflow.keras.layers import LeakyReLU
+from tensorflow.keras.layers import UpSampling2D, Conv2D
+from tensorflow.keras.models import Sequential, Model
 
 import numpy as np
 

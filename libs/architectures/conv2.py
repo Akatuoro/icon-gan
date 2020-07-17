@@ -1,8 +1,8 @@
-from keras.layers import Input, Dense, Reshape, Flatten, Dropout
-from keras.layers import BatchNormalization, Activation, ZeroPadding2D
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import UpSampling2D, Conv2D
-from keras.models import Sequential, Model
+from tensorflow.keras.layers import Input, Dense, Reshape, Flatten, Dropout
+from tensorflow.keras.layers import BatchNormalization, Activation, ZeroPadding2D
+from tensorflow.keras.layers import LeakyReLU
+from tensorflow.keras.layers import UpSampling2D, Conv2D
+from tensorflow.keras.models import Sequential, Model
 
 import numpy as np
 
@@ -13,7 +13,7 @@ def generator(latent_dim, img_shape):
     model.add(Reshape((32, 32, 128)))
     model.add(BatchNormalization(momentum=0.8))
     #model.add(UpSampling2D())
-    model.add(Conv2D(128, kernel_size=3, padding="same"))
+    model.add(Conv2D(128, kernel_size=3, padding="same", data_format="channels_last"))
     model.add(Activation("relu"))
     model.add(BatchNormalization(momentum=0.8))
     #model.add(UpSampling2D())
