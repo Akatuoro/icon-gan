@@ -38,6 +38,22 @@
         })
     }
 
+
+    function onCanvasClick(e) {
+        const x = Math.floor(e.offsetX / 64)
+        const y = Math.floor(e.offsetY / 64)
+
+        const center = (n-1)/2
+
+        if (x !== center || y !== center) {
+            const dx = x - center / center
+            const dy = y - center / center
+            style = style.move(tf.add(vx.mul(scale * dx), vy.mul(scale * dy)))
+
+            onUpdate()
+        }
+    }
+
     onMount(async () => {
         await modelPromise
 
@@ -83,6 +99,6 @@
 </style>
 
 <div class="background">
-    <canvas bind:this={canvas} id="canvas" width={n * 64} height={n * 64}></canvas>
+    <canvas bind:this={canvas} on:click={onCanvasClick} id="canvas" width={n * 64} height={n * 64}></canvas>
     <input bind:this={scaleSlider} type="range" min="1" max="500" value="50" id="scale-slider">
 </div>

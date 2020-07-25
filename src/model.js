@@ -54,6 +54,10 @@ export class Style extends Array {
         }
     }
 
+    move(v) {
+        return this.map(val => tf.add(val, tf.expandDims(v, 0)))
+    }
+
     expand1d(v, steps = 3) {
         // lspace [steps, 1]
         const lspace = tf.expandDims(tf.linspace(0, 1, steps).mul(v), -1)
