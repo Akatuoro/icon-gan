@@ -44,7 +44,7 @@ export class Style extends Array {
         }
     }
 
-    random(num) {
+    random(num=5) {
         if (this.length > 0) {
             tf.dispose(this)
             this.length = 0
@@ -79,12 +79,20 @@ export class Style extends Array {
         // add styles [1, 1, latentDim] with above, then flatten to [steps**2, latentDim]
         return this.map(val => tf.reshape(tf.add(tf.expandDims(val, 0), xylspace), [-1, this.latentDim]))
     }
+
+    arraySync() {
+        return this.map(t => t.arraySync())
+    }
+
+    static fromData(data) {
+        return new this(data.map(d => tf.tensor(d)))
+    }
 }
 
 
 export class ImageNoise {
-    constructor() {
-        this.tensor = tf.randomUniform([1, 64, 64, 1])
+    constructor(tensor) {
+        this.tensor = tensor ?? tf.randomUniform([1, 64, 64, 1])
     }
 
     random() {
@@ -106,6 +114,14 @@ export class ImageNoise {
             styles[3],
             styles[4]
         ]
+    }
+
+    arraySync() {
+        return this.tensor.arraySync()
+    }
+
+    static fromData(data) {
+        return new this(tf.tensor(data))
     }
 }
 
