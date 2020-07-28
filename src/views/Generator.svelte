@@ -1,94 +1,38 @@
 <script>
     import {onMount} from 'svelte'
-    import * as tf from '@tensorflow/tfjs';
-    import {getModel, getImageData, toImg, drawImage, getNoise, expandNoise, ImageNoise, Style} from '../model'
+    import {Exploration} from '../exploration'
+    import * as Comlink from 'comlink'
     import { saveAs } from 'file-saver';
 
-
-    const modelPromise = getModel()
 
     let canvas
     let scaleSlider
 
-
+    $: ctx = canvas && canvas.getContext('2d')
 
     let n = 3
     let scale = 0.5
 
-    let imageNoise = new ImageNoise()
-    let style = new Style()
-
-
-    let vx = tf.oneHot(1, style.latentDim)
-    let vy = tf.oneHot(2, style.latentDim)
-
-    window.getConfig = () => {
-        const config = {
-            style: style.arraySync(),
-            imageNoise: imageNoise.arraySync(),
-            vx: vx.arraySync(),
-            vy: vy.arraySync(),
-            scale,
-            n
-        }
-
-        return config
+    function onUpdate(imageData) {
+        ctx.putImageData(imageData, 0, 0)
     }
 
+    let explorer
+
+    window.getConfig = () => explorer.getConfig()
+
     window.setConfig = config => {
-        n = config.n
-        scale = config.scale
+        explorer.setConfig(config)
 
-        tf.dispose(imageNoise)
-        tf.dispose(style)
-        tf.dispose(vx)
-        tf.dispose(vy)
-        imageNoise = ImageNoise.fromData(config.imageNoise)
-        style = Style.fromData(config.style)
-        vx = tf.tensor(config.vx)
-        vy = tf.tensor(config.vy)
-
-        onUpdate()
+        explorer.update()
     }
 
     window.saveConfig = () => {
-        const config = getConfig()
+        const config = explorer.getConfig()
 
         const json = JSON.stringify(config)
         const file = new File([json], 'icon.icon-def', {type: "text/plain;charset=utf-8"})
         saveAs(file)
-    }
-
-    function reset() {
-        imageNoise.random()
-        style.random()
-
-        //scale = 0.5
-        tf.dispose(vx)
-        tf.dispose(vy)
-        vx = tf.oneHot(1, style.latentDim)
-        vy = tf.oneHot(2, style.latentDim)
-
-        onUpdate()
-    }
-
-    
-
-    async function onUpdate() {
-        const model = await getModel()
-
-        tf.tidy(() => {
-            //const exStyle = style.expand1d(scale, n)
-            const exStyle = style.expand2d(vx.mul(scale), vy.mul(scale), n)
-            //const exNoise = expandNoise(noise, n**2, scale)
-
-            const combined = imageNoise.combineWithStyles(exStyle)
-
-            const tensor = model.execute(combined)
-
-            const ctx = canvas.getContext('2d')
-            drawImage(ctx, toImg(tensor, n))
-        })
     }
 
 
@@ -96,15 +40,7 @@
         const x = Math.floor(e.offsetX / 64)
         const y = Math.floor(e.offsetY / 64)
 
-        const center = (n-1)/2
-
-        if (x !== center || y !== center) {
-            const dx = x - center / center
-            const dy = y - center / center
-            style = style.move(tf.add(vx.mul(scale * dx), vy.mul(scale * dy)))
-
-            onUpdate()
-        }
+        explorer.moveTo(x, y)
     }
 
     function onCanvasScroll(e) {
@@ -112,21 +48,36 @@
 
         const deltaY = e.deltaY || -e.wheelData
 
-        scale += deltaY / 500
+        explorer.scale += deltaY / 500
 
-        onUpdate()
+        explorer.update()
     }
 
     function onScaleSliderChange(e) {
-        scale = e.target.value / 10
-        onUpdate()
+        explorer.scale = e.target.value / 10
+        explorer.update()
     }
 
     onMount(async () => {
-        await modelPromise
+        const {webgl, worker, offscreen} = checkSupport()
+        const useWorker = worker && (!webgl || (webgl && offscreen))
+
+        console.log(useWorker? 'using worker' : 'not using worker')
+
+        if (useWorker) {
+            explorer = Comlink.wrap(new Worker('dist/exploration-worker.js'))
+            explorer.onUpdate = Comlink.proxy(onUpdate)
+        }
+        else {
+            explorer = new Exploration({n, scale, onUpdate})
+        }
 
 
-        onUpdate()
+        console.log('loading model')
+        await explorer.preLoad()
+
+        console.log('model loaded, update')
+        explorer.update()
 
         const home = document.getElementById('home')
         home.hidden = true
@@ -153,5 +104,5 @@
     <canvas bind:this={canvas} on:click={onCanvasClick} on:wheel={onCanvasScroll} id="canvas" width={n * 64} height={n * 64}></canvas>
     <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
 
-    <button on:click={reset}>reset</button>
+    <button on:click={() => explorer.reset()}>reset</button>
 </div>

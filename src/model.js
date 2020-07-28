@@ -2,7 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 import {loadGraphModel} from '@tensorflow/tfjs-converter';
 import { model } from '@tensorflow/tfjs';
 
-export const MODEL_URL = 'models/logo-10-web/model.json';
+export const MODEL_URL = '/models/logo-10-web/model.json';
 
 let modelPromise
 
@@ -12,10 +12,6 @@ export function getModel() {
     }
     return modelPromise
 }
-
-window.getModel = getModel
-window.tf = tf
-
 
 export function toImg(tensor, w) {
     const n = tensor.shape[0]
@@ -174,6 +170,3 @@ export function getImageData(model, n, scale) {
 export function drawImage(ctx, im_data) {
     ctx.putImageData(im_data, 0, 0)
 }
-
-window.getImageData = getImageData
-window.drawImage = drawImage

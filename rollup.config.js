@@ -5,7 +5,7 @@ import {terser} from 'rollup-plugin-terser'
 
 const production = !process.env.ROLLUP_WATCH
 
-export default {
+export default [{
 	input: 'src/main.js',
 	output: {
 		sourcemap: true,
@@ -19,4 +19,17 @@ export default {
 		commonjs(),
 		production && terser(),
 	],
-}
+}, {
+	input: 'src/exploration-worker.js',
+	output: {
+		sourcemap: true,
+		format: 'iife',
+		name: 'esm',
+		file: 'dist/exploration-worker.js',
+	},
+	plugins: [
+		resolve({browser: true}),
+		commonjs(),
+		production && terser(),
+	],
+}]

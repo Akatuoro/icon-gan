@@ -35,6 +35,7 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "^14.0.0",
     "@rollup/plugin-node-resolve": "^8.4.0",
+    "comlink": "^4.3.0",
     "file-saver": "^2.0.2",
     "rollup": "^2.22.2",
     "rollup-plugin-terser": "^6.1.0",

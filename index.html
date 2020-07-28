@@ -101,18 +101,26 @@
             font-size: 12px;
         }
 
-        .footer {
+        .footer,
+        .header {
             width: 100%;
             color: #ff9b28;
             position: absolute;
-            bottom: 4px;
             display: flex;
             justify-content: space-evenly;
         }
 
-        .footer > div {
+        .header {
+            top: 4px;
+        }
+
+        .footer {
+            bottom: 4px;
+        }
+
+        .footer > div,
+        .header > div {
             width: 150px;
-            text-align: center;
         }
 
         a {
@@ -227,11 +235,48 @@
             location.hash = ''
         }
 
+        let support
+
+        /** Checks support for worker, webgl and offscreen canvas */
+        function checkSupport() {
+            if (support) return support
+
+            const canvas = document.createElement('canvas')
+            const gl = canvas.getContext('webgl') ||
+                canvas.getContext('experimental-webgl')
+
+            return {
+                worker: !!window.Worker,
+                webgl: gl && gl instanceof WebGLRenderingContext,
+                offscreen: !!window.OffscreenCanvas
+            }
+        }
+
         function onload() {
             if (location.hash !== '') {
                 const overlay = document.getElementById("overlay")
                 overlay.hidden = false
             }
+
+            const supported = checkSupport()
+
+            const setColor = id => {
+                document.getElementById(id).style.color = '#ff9b28'
+            }
+
+            if (supported.webgl) {
+                setColor('webgl')
+
+                if (supported.worker && supported.offscreen) {
+                    setColor('plus')
+                    setColor('worker')
+                }
+            }
+            else if (supported.worker) {
+                setColor('worker')
+            }
+
+            document.getElementById('support').hidden = false
         }
     </script>
 </head>
@@ -239,6 +284,18 @@
     <div id="home">
         <div class="container">
             <div class="container-content" style="position: absolute;">
+                <div class="header">
+                    <div style="text-align: left;"><noscript>Enable JavaScript!</noscript></div>
+                    <div></div>
+                    <div style="text-align: right;">
+                        <div id="support" hidden style="color: gray; animation: fadein 0.5s;">
+                            <span id="webgl">WebGL</span>
+                            <span id="plus"> + </span>
+                            <span id="worker">Worker</span>
+                        </div>
+                    </div>
+                </div>
+
                 <h1>Icon GAN</h1>
                 <div class="flex-center btn-container">
                     <div style="position: absolute;">
@@ -253,9 +310,9 @@
                 </div>
 
                 <div class="footer">
-                    <div><a href="https://github.com/Akatuoro/icon-gan">GitHub</a></div>
-                    <div>About</div>
-                    <div>License: CC-BY-NC</div>
+                    <div style="text-align: left;"><a href="https://github.com/Akatuoro/icon-gan">GitHub</a></div>
+                    <div style="text-align: center;">About</div>
+                    <div style="text-align: right;">License: CC-BY-NC</div>
                 </div>
             </div>
         </div>
