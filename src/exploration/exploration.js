@@ -5,13 +5,17 @@ import {getModel, toImg, ImageNoise, Style} from './model'
 
 
 export class Exploration {
-    constructor({n, scale, config, onUpdate} = {n: 3, scale: 0.5}) {
+    /**
+     * Initializes class. Has to be called exactly once before the class can be used.
+     */
+    async init({n, scale, config, onUpdate} = {n: 3, scale: 0.5}) {
         this.n = n
         this.scale = scale
         this.onUpdate = onUpdate
 
         this.updateQueue = []
         this.queueTS = undefined
+        console.log('init', this)
 
         if (config) {
             this.setConfig(config)
@@ -38,7 +42,7 @@ export class Exploration {
         return config
     }
 
-    setConfig() {
+    setConfig(config) {
         this.n = config.n
         this.scale = config.scale
 

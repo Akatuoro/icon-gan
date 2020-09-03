@@ -1,7 +1,6 @@
 <script>
     import {onMount} from 'svelte'
-    import {Exploration} from '../exploration'
-    import * as Comlink from 'comlink'
+    import {explore} from '../exploration'
     import { saveAs } from 'file-saver';
 
 
@@ -43,35 +42,26 @@
         explorer.moveTo(x, y)
     }
 
-    function onCanvasScroll(e) {
+    async function onCanvasScroll(e) {
         e.preventDefault()
 
         const deltaY = e.deltaY || -e.wheelData
 
-        explorer.scale += deltaY / 500
+        scale += deltaY / 500
+        explorer.scale = scale
 
         explorer.update()
     }
 
     function onScaleSliderChange(e) {
-        explorer.scale = e.target.value / 10
+        scale = e.target.value / 10
+
+        explorer.scale = scale
         explorer.update()
     }
 
     onMount(async () => {
-        const {webgl, worker, offscreen} = checkSupport()
-        const useWorker = worker && (!webgl || (webgl && offscreen))
-
-        console.log(useWorker? 'using worker' : 'not using worker')
-
-        if (useWorker) {
-            explorer = Comlink.wrap(new Worker('dist/exploration-worker.js'))
-            explorer.onUpdate = Comlink.proxy(onUpdate)
-        }
-        else {
-            explorer = new Exploration({n, scale, onUpdate})
-        }
-
+        explorer = await explore({onUpdate});
 
         console.log('loading model')
         await explorer.preLoad()

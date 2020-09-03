@@ -245,11 +245,12 @@
             const gl = canvas.getContext('webgl') ||
                 canvas.getContext('experimental-webgl')
 
-            return {
+            support = {
                 worker: !!window.Worker,
                 webgl: gl && gl instanceof WebGLRenderingContext,
                 offscreen: !!window.OffscreenCanvas
             }
+            return support
         }
 
         function onload() {
