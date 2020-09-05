@@ -96,10 +96,10 @@ export class Exploration {
         tf.dispose(this.updateQueue)
         this.updateQueue.length = 0
 
-        const exStyle = this.style.expand2d(
+        const exStyle = tf.tidy(() => this.style.expand2d(
             this.vx.mul(this.scale),
             this.vy.mul(this.scale),
-            this.n)
+            this.n))
 
         this.updateQueue.push(exStyle)
 
