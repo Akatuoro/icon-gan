@@ -1,6 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 
-import {getModel, toImg, ImageNoise, Style} from './model'
+import {getModel, toImg} from './model'
+import {ImageNoise, Style} from './input'
 
 
 
