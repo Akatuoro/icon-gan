@@ -38,15 +38,28 @@ export class Style extends Array {
     expand2d(vx, vy, steps=3, surround=true) {
         const lspace = tf.linspace(surround? -1 : 0, 1, steps)
 
-        // [steps, 1, 1]
+        // [steps, 1, latentDim]
         const xlspace = tf.expandDims(tf.expandDims(lspace, -1).mul(tf.expandDims(vx, 0)), 1)
-        // [1, steps, 1]
+        // [1, steps, latentDim]
         const ylspace = tf.expandDims(tf.expandDims(lspace, -1).mul(tf.expandDims(vy, 0)), 0)
-        // [steps, steps, 1]
+        // [steps, steps, latentDim]
         const xylspace = tf.add(xlspace, ylspace)
 
         // add styles [1, 1, latentDim] with above, then flatten to [steps**2, latentDim]
         return this.map(val => tf.reshape(tf.add(tf.expandDims(val, 0), xylspace), [-1, this.latentDim]))
+    }
+
+    batchExpand2d(vx, vy, positionInfo) {
+        // [2, latentDim]
+        const vxy = tf.stack([vx, vy])
+        // [batchSize, 2]
+        const pos = tf.tensor(positionInfo)
+
+        // [batchSize, latentDim]
+        const variants = tf.matMul(pos, vxy)
+
+        // add styles [1, latentDim] with above -> [batchSize, latentDim]
+        return this.map(val => tf.add(val, variants))
     }
 
     arraySync() {

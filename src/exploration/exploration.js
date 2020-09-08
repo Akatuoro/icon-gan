@@ -2,7 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 
 import {getModel, toImg} from './model'
 import {ImageNoise, Style} from './input'
-
+import {BatchStrategy2D} from './batch'
 
 
 export class Exploration {
@@ -15,9 +15,9 @@ export class Exploration {
         this.onUpdate = onUpdate
         this.useIncrementalUpdate = useIncrementalUpdate
 
-        this.updateQueue = []
+        this.batchStrategy = new BatchStrategy2D(n, n);
+        this.updateSteps = 0
         this.queueTS = undefined
-        console.log('init', this)
 
         if (config) {
             this.setConfig(config)
@@ -57,6 +57,9 @@ export class Exploration {
         this.vx = tf.tensor(config.vx)
         this.vy = tf.tensor(config.vy)
 
+        this.batchStrategy = new BatchStrategy2D(n, n)
+        this.updateSteps = 0
+
         this.update()
     }
 
@@ -94,15 +97,7 @@ export class Exploration {
     }
 
     async update() {
-        tf.dispose(this.updateQueue)
-        this.updateQueue.length = 0
-
-        const exStyle = tf.tidy(() => this.style.expand2d(
-            this.vx.mul(this.scale),
-            this.vy.mul(this.scale),
-            this.n))
-
-        this.updateQueue.push(exStyle)
+        this.updateSteps = 0
 
         if (!this.queueTS) {
             this.queueTS = setTimeout(() => this.queueStep())
@@ -111,28 +106,25 @@ export class Exploration {
 
     async queueStep() {
         const model = await getModel()
-        const exStyle = this.updateQueue.shift()
+        const positionInfo = this.batchStrategy.batch(this.updateSteps)
+        this.updateSteps++
 
         tf.tidy(() => {
+            const exStyle = this.style.batchExpand2d(
+                this.vx.mul(this.scale),
+                this.vy.mul(this.scale),
+                positionInfo.map(([x, y]) => [x - (this.n - 1) / 2, y - (this.n - 1) / 2]))
+
             const combined = this.imageNoise.combineWithStyles(exStyle)
 
             const tensor = model.execute(combined)
 
-            if (this.useIncrementalUpdate) {
-                const imageData = toImg(tensor, 1)
+            const imageData = toImg(tensor, 1)
 
-                this.onUpdate?.(imageData, Array(this.n ** 2).fill(1).map((v, i) => [i % this.n, (i - i % this.n) / this.n]))
-            }
-            else {
-                const imageData = toImg(tensor, this.n)
-    
-                this.onUpdate?.(imageData)
-            }
+            this.onUpdate?.(imageData, positionInfo)
         })
 
-        tf.dispose(exStyle)
-
-        if (this.updateQueue.length > 0) {
+        if (this.updateSteps < this.batchStrategy.max) {
             this.queueTS = setTimeout(() => this.queueStep())
         }
         else {
