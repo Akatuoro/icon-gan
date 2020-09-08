@@ -9,10 +9,11 @@ export class Exploration {
     /**
      * Initializes class. Has to be called exactly once before the class can be used.
      */
-    async init({n, scale, config, onUpdate} = {n: 3, scale: 0.5}) {
+    async init({n = 3, scale = 0.5, config, onUpdate, useIncrementalUpdate} = {}) {
         this.n = n
         this.scale = scale
         this.onUpdate = onUpdate
+        this.useIncrementalUpdate = useIncrementalUpdate
 
         this.updateQueue = []
         this.queueTS = undefined
@@ -114,12 +115,19 @@ export class Exploration {
 
         tf.tidy(() => {
             const combined = this.imageNoise.combineWithStyles(exStyle)
-    
+
             const tensor = model.execute(combined)
+
+            if (this.useIncrementalUpdate) {
+                const imageData = toImg(tensor, 1)
+
+                this.onUpdate?.(imageData, Array(this.n ** 2).fill(1).map((v, i) => [i % this.n, (i - i % this.n) / this.n]))
+            }
+            else {
+                const imageData = toImg(tensor, this.n)
     
-            const imageData = toImg(tensor, this.n)
-    
-            this.onUpdate?.(imageData)
+                this.onUpdate?.(imageData)
+            }
         })
 
         tf.dispose(exStyle)

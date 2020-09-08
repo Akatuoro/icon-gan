@@ -14,14 +14,14 @@ export const explore = async options => {
         // proxy should ideally be released at some point
         const onUpdate = Comlink.proxy(options.onUpdate)
         delete options.onUpdate
-        await explorer.init()
+        await explorer.init(options)
 
         explorer.onUpdate = onUpdate
         return explorer
     }
     else {
         const explorer = new Exploration()
-        await explorer.init({n, scale, onUpdate})
+        await explorer.init(options)
         return explorer
     }
 }

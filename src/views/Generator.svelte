@@ -2,6 +2,7 @@
     import {onMount} from 'svelte'
     import {explore} from '../exploration'
     import { saveAs } from 'file-saver';
+import { image } from '@tensorflow/tfjs';
 
 
     let canvas
@@ -12,8 +13,15 @@
     let n = 3
     let scale = 0.5
 
-    function onUpdate(imageData) {
-        ctx.putImageData(imageData, 0, 0)
+    function onUpdate(imageData, positionInfo) {
+
+        if (!positionInfo) {
+            ctx.putImageData(imageData, 0, 0)
+            return
+        }
+        positionInfo.forEach(([x, y], i) => {
+            ctx.putImageData(imageData, x * 64 - i * 64, y * 64, i * 64, 0, 64, 64)
+        })
     }
 
     let explorer
@@ -61,7 +69,7 @@
     }
 
     onMount(async () => {
-        explorer = await explore({onUpdate});
+        explorer = await explore({onUpdate, useIncrementalUpdate: true});
 
         console.log('loading model')
         await explorer.preLoad()

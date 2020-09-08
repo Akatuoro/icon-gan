@@ -12,10 +12,10 @@ export function getModel() {
     return modelPromise
 }
 
-export function toImg(tensor, w) {
+export function toImg(tensor, h) {
     const n = tensor.shape[0]
 
-    const h = n/w
+    const w = n/h
 
     let d = tf.concat([tensor.clipByValue(0, 1), tf.ones([n, 64, 64, 1])], 3).mul(255)
     d = tf.reshape(d, [w, h, 64, 64, 4])
