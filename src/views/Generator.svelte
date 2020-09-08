@@ -69,7 +69,7 @@ import { image } from '@tensorflow/tfjs';
     }
 
     onMount(async () => {
-        explorer = await explore({onUpdate, useIncrementalUpdate: true});
+        explorer = await explore({onUpdate});
 
         console.log('loading model')
         await explorer.preLoad()

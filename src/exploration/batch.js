@@ -1,15 +1,62 @@
 
-export class BatchStrategy2DAIO {
-    constructor(w=3, h=3) {
+export class BatchGenerator {
+    constructor(...args) {
+        this.reset(...args)
+
+        this.resetQueue()
+        this.queueTS = undefined
+        this.queueCb = undefined
+    }
+
+    reset() { }
+
+    resetQueue() { }
+
+    queue(cb) {
+        this.resetQueue()
+
+        this.queueCb = cb
+
+        if (!this.queueTS) {
+            this.queueTS = setTimeout(() => this.queueStep())
+        }
+    }
+
+    queueStep() {
+        this.queueCb(this.next())
+
+        if (this.done) {
+            this.queueTS = undefined
+        }
+        else {
+            this.queueTS = setTimeout(() => this.queueStep())
+        }
+    }
+
+    get done() {
+        return true
+    }
+
+    next() { }
+}
+
+export class BatchGenerator2DAIO extends BatchGenerator {
+    reset(w=3, h=3) {
         this.w = w
         this.h = h
     }
 
-    get max() {
-        return 1
+    resetQueue() {
+        this.i = 0
     }
 
-    batch(i) {
+    get done() {
+        return this.i >= 1
+    }
+
+    next() {
+        this.i++
+
         const positions = []
 
         for (let x = 0; x < this.w; x++) {
@@ -22,18 +69,24 @@ export class BatchStrategy2DAIO {
     }
 }
 
-export class BatchStrategy2D {
+export class BatchGenerator2D extends BatchGenerator {
     /** Only works with uneven w and h */
-    constructor(w=3, h=3) {
+    reset(w=3, h=3) {
         this.w = 3
         this.h = 3
     }
 
-    get max() {
-        return 2
+    resetQueue() {
+        this.i = 0
     }
 
-    batch(i) {
+    get done() {
+        return this.i >= 2
+    }
+
+    next() {
+        const i = this.i
+        this.i++
         if (i === 0) {
             const maxX = this.w - 1
             const maxY = this.h - 1

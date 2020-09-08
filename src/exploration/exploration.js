@@ -2,22 +2,19 @@ import * as tf from '@tensorflow/tfjs';
 
 import {getModel, toImg} from './model'
 import {ImageNoise, Style} from './input'
-import {BatchStrategy2D} from './batch'
+import {BatchGenerator2D, BatchGenerator2DAIO} from './batch'
 
 
 export class Exploration {
     /**
      * Initializes class. Has to be called exactly once before the class can be used.
      */
-    async init({n = 3, scale = 0.5, config, onUpdate, useIncrementalUpdate} = {}) {
+    async init({n = 3, scale = 0.5, config, onUpdate} = {}) {
         this.n = n
         this.scale = scale
         this.onUpdate = onUpdate
-        this.useIncrementalUpdate = useIncrementalUpdate
 
-        this.batchStrategy = new BatchStrategy2D(n, n);
-        this.updateSteps = 0
-        this.queueTS = undefined
+        this.batchGenerator = new BatchGenerator2DAIO(n, n)
 
         if (config) {
             this.setConfig(config)
@@ -57,8 +54,7 @@ export class Exploration {
         this.vx = tf.tensor(config.vx)
         this.vy = tf.tensor(config.vy)
 
-        this.batchStrategy = new BatchStrategy2D(n, n)
-        this.updateSteps = 0
+        this.batchGenerator.reset(n, n)
 
         this.update()
     }
@@ -97,17 +93,11 @@ export class Exploration {
     }
 
     async update() {
-        this.updateSteps = 0
-
-        if (!this.queueTS) {
-            this.queueTS = setTimeout(() => this.queueStep())
-        }
+        this.batchGenerator.queue(this.queueStep.bind(this))
     }
 
-    async queueStep() {
+    async queueStep(positionInfo) {
         const model = await getModel()
-        const positionInfo = this.batchStrategy.batch(this.updateSteps)
-        this.updateSteps++
 
         tf.tidy(() => {
             const exStyle = this.style.batchExpand2d(
@@ -123,12 +113,5 @@ export class Exploration {
 
             this.onUpdate?.(imageData, positionInfo)
         })
-
-        if (this.updateSteps < this.batchStrategy.max) {
-            this.queueTS = setTimeout(() => this.queueStep())
-        }
-        else {
-            this.queueTS = undefined
-        }
     }
 }
