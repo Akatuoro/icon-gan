@@ -20,7 +20,7 @@ export default [{
 		production && terser(),
 	],
 }, {
-	input: 'src/exploration-worker.js',
+	input: 'src/exploration/worker.js',
 	output: {
 		sourcemap: true,
 		format: 'iife',

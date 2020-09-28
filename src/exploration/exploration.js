@@ -1,17 +1,20 @@
 import * as tf from '@tensorflow/tfjs';
 
-import {getModel, toImg, ImageNoise, Style} from './model'
-
+import {getModel, toImg} from './model'
+import {ImageNoise, Style} from './input'
+import {BatchGenerator2D, BatchGenerator2DAIO} from './batch'
 
 
 export class Exploration {
-    constructor({n, scale, config, onUpdate} = {n: 3, scale: 0.5}) {
+    /**
+     * Initializes class. Has to be called exactly once before the class can be used.
+     */
+    async init({n = 3, scale = 0.5, config, onUpdate} = {}) {
         this.n = n
         this.scale = scale
         this.onUpdate = onUpdate
 
-        this.updateQueue = []
-        this.queueTS = undefined
+        this.batchGenerator = new BatchGenerator2DAIO(n, n)
 
         if (config) {
             this.setConfig(config)
@@ -38,7 +41,7 @@ export class Exploration {
         return config
     }
 
-    setConfig() {
+    setConfig(config) {
         this.n = config.n
         this.scale = config.scale
 
@@ -50,6 +53,8 @@ export class Exploration {
         this.style = Style.fromData(config.style)
         this.vx = tf.tensor(config.vx)
         this.vy = tf.tensor(config.vy)
+
+        this.batchGenerator.reset(n, n)
 
         this.update()
     }
@@ -88,42 +93,25 @@ export class Exploration {
     }
 
     async update() {
-        tf.dispose(this.updateQueue)
-        this.updateQueue.length = 0
-
-        const exStyle = tf.tidy(() => this.style.expand2d(
-            this.vx.mul(this.scale),
-            this.vy.mul(this.scale),
-            this.n))
-
-        this.updateQueue.push(exStyle)
-
-        if (!this.queueTS) {
-            this.queueTS = setTimeout(() => this.queueStep())
-        }
+        this.batchGenerator.queue(this.queueStep.bind(this))
     }
 
-    async queueStep() {
+    async queueStep(positionInfo) {
         const model = await getModel()
-        const exStyle = this.updateQueue.shift()
 
         tf.tidy(() => {
+            const exStyle = this.style.batchExpand2d(
+                this.vx.mul(this.scale),
+                this.vy.mul(this.scale),
+                positionInfo.map(([x, y]) => [x - (this.n - 1) / 2, y - (this.n - 1) / 2]))
+
             const combined = this.imageNoise.combineWithStyles(exStyle)
-    
+
             const tensor = model.execute(combined)
-    
-            const imageData = toImg(tensor, this.n)
-    
-            this.onUpdate?.(imageData)
+
+            const imageData = toImg(tensor, 1)
+
+            this.onUpdate?.(imageData, positionInfo)
         })
-
-        tf.dispose(exStyle)
-
-        if (this.updateQueue.length > 0) {
-            this.queueTS = setTimeout(() => this.queueStep())
-        }
-        else {
-            this.queueTS = undefined
-        }
     }
 }
