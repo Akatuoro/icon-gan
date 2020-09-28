@@ -15,6 +15,9 @@ convertlist.txt
 .vscode
 dist
 models
+scraped
+
+.scrapy
 
 # Created by https://www.gitignore.io/api/node,macos,jupyternotebooks
 # Edit at https://www.gitignore.io/?templates=node,macos,jupyternotebooks
