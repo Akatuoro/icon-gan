@@ -17,7 +17,7 @@ export default [{
 		svelte({dev: !production}),
 		resolve({browser: true, dedupe: ['svelte']}),
 		commonjs(),
-		production && terser(),
+		// production && terser(),
 	],
 }, {
 	input: 'src/exploration/worker.js',
@@ -30,6 +30,6 @@ export default [{
 	plugins: [
 		resolve({browser: true}),
 		commonjs(),
-		production && terser(),
+		// production && terser(),
 	],
 }]

@@ -13,6 +13,7 @@ convertlist.txt
 !generated_icon.png
 
 .vscode
+build
 dist
 models
 scraped

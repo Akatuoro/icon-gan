@@ -1,7 +1,8 @@
 import * as tf from '@tensorflow/tfjs';
 import {loadGraphModel} from '@tensorflow/tfjs-converter';
 
-export const MODEL_URL = '/models/logo-10-web/model.json';
+export const MODEL_URL = 'https://raw.githubusercontent.com/Akatuoro/nn-models/master/icons-64-web/model.json';
+//'/models/icons-64-web/model.json';
 
 let modelPromise
 
