@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "bundle": "npm run build && mkdir -p build/dist && cp dist/* build/dist && cp index.html build/index.html && mkdir -p build/public && cp public/* build/public",
+    "bundle": "npm run build && mkdir -p build/dist && cp dist/* build/dist && cp index.html build/index.html",
     "build": "rollup -c",
     "watch": "rollup -c -w",
     "dev": "run-p watch start",
