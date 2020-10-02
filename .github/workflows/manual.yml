@@ -33,8 +33,11 @@ jobs:
     - name: Install and Build
       run: |
         echo "Hello ${{ github.event.inputs.name }}"
+        ls
+        echo $PWD
         npm install
         npm build
+        ls build
     - name: Deploy to GitHub Pages
       uses: JamesIves/github-pages-deploy-action@3.6.2
       with:
