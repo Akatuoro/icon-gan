@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<head>
+    
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title></title>
+
+    <script async src="dist/bundle.js"></script>
+    
+    <style>
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        body {
+            background-color: #051A33;
+        }
+
+        #home {
+            position: absolute;
+            left: 0px;
+            top: 0px;
+            width: 100%;
+            height: 100%;
+            background-image: url("public/icons.png");
+            background-position: center;
+        }
+
+        h1 {
+            color: #ff9b28;
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 86px;
+            margin-top: 86px;
+        }
+
+        .container {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container-content {
+            width: 448px;
+            height: 384px;
+            background-color: #051A33;
+        }
+
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-container {
+            height: 60px;
+        }
+
+        .btn {
+            width: 180px;
+            height: 60px;
+            cursor: pointer;
+            background: transparent;
+            border: 1px solid #ff9b28;
+            outline: none;
+            transition: 1s ease-in-out;
+        }
+
+        svg {
+            position: absolute;
+            left: 0;
+            top: 0;
+            fill: none;
+            stroke: #ff9b28;
+            stroke-dasharray: 150 480;
+            stroke-dashoffset: 150;
+            transition: 1s ease-in-out;
+        }
+
+        .btn:hover {
+            transition: 1s ease-in-out;
+            background: #ff9b2821;
+        }
+
+        .btn:hover svg {
+            stroke-dashoffset: -480;
+        }
+
+        .btn span {
+            color: #ff9b28;
+            font-size: 18px;
+            font-weight: 100;
+        }
+
+        .btn span span {
+            font-size: 12px;
+        }
+
+        .footer,
+        .header {
+            width: 100%;
+            color: #ff9b28;
+            position: absolute;
+            display: flex;
+            justify-content: space-evenly;
+        }
+
+        .header {
+            top: 4px;
+        }
+
+        .footer {
+            bottom: 4px;
+        }
+
+        .footer > div,
+        .header > div {
+            width: 150px;
+        }
+
+        a {
+            color: #ff9b28;
+            text-decoration: none;
+        }
+
+        a:visited {
+            color: #c47822;
+        }
+
+
+        #overlay {
+            position: absolute;
+            left: 0px;
+            top: 0px;
+            width: 100%;
+            height: 100%;
+            background-color: #00000083;
+
+            animation: fadein 0.5s;
+        }
+
+        @keyframes fadein {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+
+
+        /* https://loading.io/css/ */
+        .lds-grid {
+            display: inline-block;
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        .lds-grid div {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff9b28;
+            animation: lds-grid 1.2s linear infinite;
+        }
+        .lds-grid div:nth-child(1) {
+            top: 8px;
+            left: 8px;
+            animation-delay: 0s;
+        }
+        .lds-grid div:nth-child(2) {
+            top: 8px;
+            left: 32px;
+            animation-delay: -0.4s;
+        }
+        .lds-grid div:nth-child(3) {
+            top: 8px;
+            left: 56px;
+            animation-delay: -0.8s;
+        }
+        .lds-grid div:nth-child(4) {
+            top: 32px;
+            left: 8px;
+            animation-delay: -0.4s;
+        }
+        .lds-grid div:nth-child(5) {
+            top: 32px;
+            left: 32px;
+            animation-delay: -0.8s;
+        }
+        .lds-grid div:nth-child(6) {
+            top: 32px;
+            left: 56px;
+            animation-delay: -1.2s;
+        }
+        .lds-grid div:nth-child(7) {
+            top: 56px;
+            left: 8px;
+            animation-delay: -0.8s;
+        }
+        .lds-grid div:nth-child(8) {
+            top: 56px;
+            left: 32px;
+            animation-delay: -1.2s;
+        }
+        .lds-grid div:nth-child(9) {
+            top: 56px;
+            left: 56px;
+            animation-delay: -1.6s;
+        }
+        @keyframes lds-grid {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+    </style>
+
+    <script>
+        function load() {
+            const overlay = document.getElementById("overlay")
+            overlay.hidden = false
+            location.hash = '#model'
+        }
+
+        function reset() {
+            const overlay = document.getElementById("overlay")
+            overlay.hidden = true
+            location.hash = ''
+        }
+
+        let support
+
+        /** Checks support for worker, webgl and offscreen canvas */
+        function checkSupport() {
+            if (support) return support
+
+            const canvas = document.createElement('canvas')
+            const gl = canvas.getContext('webgl') ||
+                canvas.getContext('experimental-webgl')
+
+            support = {
+                worker: !!window.Worker,
+                webgl: gl && gl instanceof WebGLRenderingContext,
+                offscreen: !!window.OffscreenCanvas
+            }
+            return support
+        }
+
+        function onload() {
+            if (location.hash !== '') {
+                const overlay = document.getElementById("overlay")
+                overlay.hidden = false
+            }
+
+            const supported = checkSupport()
+
+            const setColor = id => {
+                document.getElementById(id).style.color = '#ff9b28'
+            }
+
+            if (supported.webgl) {
+                setColor('webgl')
+
+                if (supported.worker && supported.offscreen) {
+                    setColor('plus')
+                    setColor('worker')
+                }
+            }
+            else if (supported.worker) {
+                setColor('worker')
+            }
+
+            document.getElementById('support').hidden = false
+        }
+    </script>
+</head>
+<body onload="onload()">
+    <div id="home">
+        <div class="container">
+            <div class="container-content" style="position: absolute;">
+                <div class="header">
+                    <div style="text-align: left;"><noscript>Enable JavaScript!</noscript></div>
+                    <div></div>
+                    <div style="text-align: right;">
+                        <div id="support" hidden style="color: gray; animation: fadein 0.5s;">
+                            <span id="webgl">WebGL</span>
+                            <span id="plus"> + </span>
+                            <span id="worker">Worker</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h1>Icon GAN</h1>
+                <div class="flex-center btn-container">
+                    <div style="position: absolute;">
+                        <button class="btn" onclick="load()">
+                            <svg width="180px" height="60px" viewBox="0 0 180 60" class="border">
+                                <polyline points="179,1 179,59 1,59 1,1 179,1" class="bg-line" />
+                                <polyline points="179,1 179,59 1,59 1,1 179,1" class="hl-line" />
+                            </svg>
+                            <span>LOAD<br><span>(16MB)</span></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <div style="text-align: left;"><a href="https://github.com/Akatuoro/icon-gan">GitHub</a></div>
+                    <div style="text-align: center;">About</div>
+                    <div style="text-align: right;">License: CC-BY-NC</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="overlay" hidden="true" onclick="reset()">
+        <div class="container">
+            <div class="lds-grid"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        </div>
+    </div>
+</body>
