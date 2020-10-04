@@ -2,7 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 
 import {getModel, toImg} from './model'
 import {ImageNoise, Style} from './input'
-import {BatchGenerator2D, BatchGenerator2DAIO} from './batch'
+import {BatchGenerator2D, BatchGenerator2DAIO, BatchExecutor} from './batch'
 
 
 export class Exploration {
@@ -15,6 +15,7 @@ export class Exploration {
         this.onUpdate = onUpdate
 
         this.batchGenerator = new BatchGenerator2DAIO(n, n)
+        this.batchExecutor = new BatchExecutor(this.batchGenerator)
 
         if (config) {
             this.setConfig(config)
@@ -54,7 +55,7 @@ export class Exploration {
         this.vx = tf.tensor(config.vx)
         this.vy = tf.tensor(config.vy)
 
-        this.batchGenerator.reset(n, n)
+        this.batchGenerator = new BatchGenerator2DAIO(n, n)
 
         this.update()
     }
@@ -93,7 +94,8 @@ export class Exploration {
     }
 
     async update() {
-        this.batchGenerator.queue(this.queueStep.bind(this))
+        this.batchExecutor.iterable = this.batchGenerator
+        this.batchExecutor.start(this.queueStep.bind(this))
     }
 
     async queueStep(positionInfo) {
