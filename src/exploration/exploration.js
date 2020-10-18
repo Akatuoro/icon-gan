@@ -3,7 +3,35 @@ import * as tf from '@tensorflow/tfjs';
 import {getModel, toImg} from './model'
 import {ImageNoise, Style} from './input'
 import {BatchGenerator2D, BatchGenerator2DAIO, BatchExecutor} from './batch'
+import {exposed} from './exposed'
+import { DirectionExplorer } from './direction-explorer';
 
+
+class Central {
+    get style() {
+        return this._styleFn()
+    }
+
+    set style(fn) {
+        this._styleFn = fn
+    }
+
+    get imageNoise() {
+        return this._imageNoiseFn()
+    }
+
+    set imageNoise(fn) {
+        this._imageNoiseFn = fn
+    }
+
+    get scale() {
+        return this._scale()
+    }
+
+    set scale(fn) {
+        this._scale = fn
+    }
+}
 
 export class Exploration {
     /**
@@ -26,6 +54,19 @@ export class Exploration {
 
             this.randomV()
         }
+    }
+
+    createDirectionExplorer(options) {
+        const directionExplorer = new DirectionExplorer()
+        this.directionExplorer = directionExplorer
+
+        const central = new Central()
+        central.style = () => this.style
+        central.imageNoise = () => this.imageNoise
+        central.scale = () => this.scale
+        directionExplorer.init(options, central)
+
+        return exposed.proxy(directionExplorer)
     }
 
     get imageNoise() {
@@ -136,7 +177,7 @@ export class Exploration {
             const dx = x - center / center
             const dy = y - center / center
 
-            this.style = tf.tidy(this.style.move(tf.add(
+            this.style = tf.tidy(() => this.style.move(tf.add(
                 this.vx.mul(this.scale * dx),
                 this.vy.mul(this.scale * dy))))
 
@@ -153,6 +194,7 @@ export class Exploration {
     async update() {
         this.batchExecutor.iterable = this.batchGenerator
         this.batchExecutor.start(this.queueStep.bind(this))
+        this.directionExplorer && this.directionExplorer.update()
     }
 
     async queueStep(positionInfo) {

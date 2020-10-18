@@ -1,14 +1,30 @@
 import { Exploration } from './exploration';
 import * as Comlink from 'comlink'
+window.Comlink = Comlink
+
+
+let _useWorker
+
+export const setWorkerUsage = (shouldUse) => {
+    _useWorker = shouldUse?
+        checkSupport().worker :
+        false
+}
+
+export const useWorker = () => {
+    // if _useWorker was not set yet, provide a sensible default
+    if (_useWorker === undefined) {
+        const {webgl, worker, offscreen} = checkSupport()
+        _useWorker = worker && (!webgl || (webgl && offscreen))
+    }
+
+    return _useWorker
+}
 
 
 export const explore = async options => {
-    const {webgl, worker, offscreen} = checkSupport()
-    const useWorker = worker && (!webgl || (webgl && offscreen))
-
-    console.log(useWorker? 'using worker' : 'not using worker')
-
-    if (useWorker) {
+    if (useWorker()) {
+        console.log('using worker')
         const explorer = Comlink.wrap(new Worker('dist/exploration-worker.js'))
 
         // proxy should ideally be released at some point
@@ -20,8 +36,15 @@ export const explore = async options => {
         return explorer
     }
     else {
+        console.log('not using worker')
         const explorer = new Exploration()
         await explorer.init(options)
         return explorer
     }
+}
+
+export const proxy = cb => {
+    return useWorker()?
+        Comlink.proxy(cb) :
+        cb
 }

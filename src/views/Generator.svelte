@@ -1,6 +1,6 @@
 <script>
     import {onMount} from 'svelte'
-    import {explore} from '../exploration'
+    import {explore, proxy} from '../exploration'
     import { saveAs } from 'file-saver';
 import { image } from '@tensorflow/tfjs';
 
@@ -9,6 +9,21 @@ import { image } from '@tensorflow/tfjs';
     let scaleSlider
 
     $: ctx = canvas && canvas.getContext('2d')
+
+
+    let sideCanvas
+
+    $: sideCtx = sideCanvas && sideCanvas.getContext('2d')
+
+    function onSideUpdate(imageData, positionInfo) {
+        const i = 0
+        const j = positionInfo
+        const x = j % 3
+        const y = (j - x) / 3
+        sideCtx.putImageData(imageData, x * 64 - i * 64, y * 64, i * 64, 0, 64, 64)
+    }
+
+
 
     let n = 3
     let scale = 0.5
@@ -70,12 +85,21 @@ import { image } from '@tensorflow/tfjs';
 
     onMount(async () => {
         explorer = await explore({onUpdate});
+        window.explorer = explorer
 
         console.log('loading model')
         await explorer.preLoad()
 
         console.log('model loaded, update')
         explorer.update()
+
+
+        const directionExplorer = await explorer.createDirectionExplorer({n: 9})
+
+        directionExplorer.onUpdate = proxy(onSideUpdate)
+
+        directionExplorer.update()
+
 
         const home = document.getElementById('home')
         home.hidden = true
@@ -101,6 +125,8 @@ import { image } from '@tensorflow/tfjs';
 <div class="background">
     <canvas bind:this={canvas} on:click={onCanvasClick} on:wheel={onCanvasScroll} id="canvas" width={n * 64} height={n * 64}></canvas>
     <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
+
+    <canvas bind:this={sideCanvas} id="sideCanvas" width={3 * 64} height={3 * 64}></canvas>
 
     <button on:click={() => explorer.reset()}>reset</button>
 </div>

@@ -39,7 +39,7 @@ export class BatchExecutor {
      * @param {Iterable} iterable
      */
     set iterable(iterable) {
-        this._iterator = iterable[Symbol.iterator]()
+        this._iterator = iterable?.[Symbol.iterator]()
     }
 
     /**
