@@ -23,10 +23,75 @@ export class Exploration {
         else {
             this.imageNoise = new ImageNoise()
             this.style = new Style()
-    
-            this.vx = tf.oneHot(1, this.style.latentDim)
-            this.vy = tf.oneHot(2, this.style.latentDim)
+
+            this.randomV()
         }
+    }
+
+    get imageNoise() {
+        return this._imageNoise
+    }
+
+    /**
+     * Sets imageNoise and disposes of old imageNoise.
+     * @param {ImageNoise || Array} noise
+     */
+    set imageNoise(noise) {
+        this._imageNoise && tf.dispose(this._imageNoise)
+        this._imageNoise = noise instanceof ImageNoise?
+            noise :
+            ImageNoise.fromData(noise)
+    }
+
+    get style() {
+        return this._style
+    }
+
+    /**
+     * Sets style and disposes of old style.
+     * @param {Style || Array} style
+     */
+    set style(style) {
+        this._style && tf.dispose(this._style)
+        this._style = style instanceof Style?
+            style :
+            Style.fromData(style)
+    }
+
+    get vx() {
+        return this._vx
+    }
+
+    /**
+     * Sets vx and disposes of old vx.
+     * @param {tf.Tensor || Array} vx
+     */
+    set vx(vx) {
+        this._vx && tf.dispose(this._vx)
+        this._vx = vx instanceof tf.Tensor?
+            vx :
+            tf.tensor(vx)
+    }
+
+    get vy() {
+        return this._vy
+    }
+
+    /**
+     * Sets vy and disposes of old vy.
+     * @param {tf.Tensor || Array} vy
+     */
+    set vy(vy) {
+        this._vy && tf.dispose(this._vy)
+        this._vy = vy instanceof tf.Tensor?
+            vy :
+            tf.tensor(vy)
+    }
+
+
+    randomV() {
+        this.vx = tf.oneHot(Math.floor(Math.random() * this.style.latentDim), this.style.latentDim)
+        this.vy = tf.oneHot(Math.floor(Math.random() * this.style.latentDim), this.style.latentDim)
     }
 
     getConfig() {
@@ -45,17 +110,12 @@ export class Exploration {
     setConfig(config) {
         this.n = config.n
         this.scale = config.scale
+        this.imageNoise = config.imageNoise
+        this.style = config.style
+        this.vx = config.vx
+        this.vy = config.vy
 
-        tf.dispose(this.imageNoise)
-        tf.dispose(this.style)
-        tf.dispose(this.vx)
-        tf.dispose(this.vy)
-        this.imageNoise = ImageNoise.fromData(config.imageNoise)
-        this.style = Style.fromData(config.style)
-        this.vx = tf.tensor(config.vx)
-        this.vy = tf.tensor(config.vy)
-
-        this.batchGenerator = new BatchGenerator2DAIO(n, n)
+        this.batchGenerator = new BatchGenerator2DAIO(this.n, this.n)
 
         this.update()
     }
@@ -65,10 +125,7 @@ export class Exploration {
         this.style.random()
 
         //scale = 0.5
-        tf.dispose(this.vx)
-        tf.dispose(this.vy)
-        this.vx = tf.oneHot(1, this.style.latentDim)
-        this.vy = tf.oneHot(2, this.style.latentDim)
+        this.randomV()
 
         this.update()
     }
@@ -79,9 +136,9 @@ export class Exploration {
             const dx = x - center / center
             const dy = y - center / center
 
-            this.style = this.style.move(tf.add(
+            this.style = tf.tidy(this.style.move(tf.add(
                 this.vx.mul(this.scale * dx),
-                this.vy.mul(this.scale * dy)))
+                this.vy.mul(this.scale * dy))))
 
             this.update()
         }
