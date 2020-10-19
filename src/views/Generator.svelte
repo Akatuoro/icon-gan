@@ -5,21 +5,17 @@
 import { image } from '@tensorflow/tfjs';
 
 
-    let canvas
+    let canvas = new Array(3).fill(1).map(() => new Array(3).fill(1))
     let scaleSlider
 
-    $: ctx = canvas && canvas.getContext('2d')
-
-
-    let sideCanvas
-
-    $: sideCtx = sideCanvas && sideCanvas.getContext('2d')
+    let sideCanvas = []
 
     function onSideUpdate(imageData, positionInfo) {
         const i = 0
         const j = positionInfo
-        const x = j % 3
-        const y = (j - x) / 3
+        const sideCtx = sideCanvas[j].getContext('2d')
+        const x = 0//j % 3
+        const y = 0//(j - x) / 3
         sideCtx.putImageData(imageData, x * 64 - i * 64, y * 64, i * 64, 0, 64, 64)
     }
 
@@ -29,13 +25,13 @@ import { image } from '@tensorflow/tfjs';
     let scale = 0.5
 
     function onUpdate(imageData, positionInfo) {
-
         if (!positionInfo) {
             ctx.putImageData(imageData, 0, 0)
             return
         }
         positionInfo.forEach(([x, y], i) => {
-            ctx.putImageData(imageData, x * 64 - i * 64, y * 64, i * 64, 0, 64, 64)
+            const ctx = canvas[x][y].getContext('2d')
+            ctx.putImageData(imageData, 0 * 64 - i * 64, 0 * 64, i * 64, 0, 64, 64)
         })
     }
 
@@ -58,10 +54,7 @@ import { image } from '@tensorflow/tfjs';
     }
 
 
-    function onCanvasClick(e) {
-        const x = Math.floor(e.offsetX / 64)
-        const y = Math.floor(e.offsetY / 64)
-
+    function onCanvasClick(x, y) {
         explorer.moveTo(x, y)
     }
 
@@ -83,6 +76,8 @@ import { image } from '@tensorflow/tfjs';
         explorer.update()
     }
 
+    let directionExplorer
+
     onMount(async () => {
         explorer = await explore({onUpdate});
         window.explorer = explorer
@@ -94,7 +89,7 @@ import { image } from '@tensorflow/tfjs';
         explorer.update()
 
 
-        const directionExplorer = await explorer.createDirectionExplorer({n: 9})
+        directionExplorer = await explorer.createDirectionExplorer({n: 9})
 
         directionExplorer.onUpdate = proxy(onSideUpdate)
 
@@ -107,6 +102,25 @@ import { image } from '@tensorflow/tfjs';
         const overlay = document.getElementById('overlay')
         overlay.hidden = true
     })
+
+    const sideIndices = new Array(9)
+
+    let dragged
+
+    async function handleDragStart(i, e) {
+        e.dataTransfer.dropEffect = "move";
+        e.dataTransfer.setData('text', 'huhu')
+        dragged = {
+            value() { return directionExplorer.getV(i) }
+        }
+    }
+
+    async function handleDrop(e) {
+        const t = e.dataTransfer.getData('text')
+
+        const v = await dragged.value()
+        explorer.setDirection(0, 0, v)
+    }
 </script>
 
 <style>
@@ -120,13 +134,29 @@ import { image } from '@tensorflow/tfjs';
 
         background-color: #051A33;
     }
+
+    .canvas-row {
+        display: flex;
+    }
 </style>
 
 <div class="background">
-    <canvas bind:this={canvas} on:click={onCanvasClick} on:wheel={onCanvasScroll} id="canvas" width={n * 64} height={n * 64}></canvas>
+    {#each [0, 1, 2] as x}
+        <div class="canvas-row">
+        {#each [0, 1, 2] as y}
+            <canvas bind:this={canvas[x][y]} on:click={onCanvasClick.bind(null, x, y)} on:wheel={onCanvasScroll} id={`canvas${x}-${y}`} width={1 * 64} height={1 * 64}
+            on:drop={handleDrop}
+            ondragover="return false"></canvas>
+        {/each}
+        </div>
+    {/each}
     <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
 
-    <canvas bind:this={sideCanvas} id="sideCanvas" width={3 * 64} height={3 * 64}></canvas>
+    {#each sideIndices as _, i}
+        <canvas bind:this={sideCanvas[i]} id={`sideCanvas${i}`} width={1 * 64} height={1 * 64}
+        draggable=true
+        on:dragstart={handleDragStart.bind(null, i)}></canvas>
+    {/each}
 
     <button on:click={() => explorer.reset()}>reset</button>
 </div>

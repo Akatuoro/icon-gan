@@ -185,6 +185,11 @@ export class Exploration {
         }
     }
 
+    setDirection(x, y, v) {
+        this.vx = tf.tensor(v)
+        this.update()
+    }
+
     /** Initiates model (otherwise lazy loaded in update fn) */
     async preLoad() {
         await getModel()

@@ -20,6 +20,9 @@ export class DirectionExplorer {
         this.batchExecutor = new BatchExecutor()
     }
 
+    getV(i) {
+        return this.v[i].arraySync()
+    }
 
     async update() {
         this.batchExecutor.iterable = this.batchDef
