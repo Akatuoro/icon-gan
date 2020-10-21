@@ -111,15 +111,15 @@ import { image } from '@tensorflow/tfjs';
         e.dataTransfer.dropEffect = "move";
         e.dataTransfer.setData('text', 'huhu')
         dragged = {
-            value() { return directionExplorer.getV(i) }
+            valuePromise: directionExplorer.transferLatent(i)
         }
     }
 
-    async function handleDrop(e) {
+    async function handleDrop(x, y, e) {
         const t = e.dataTransfer.getData('text')
 
-        const v = await dragged.value()
-        explorer.setDirection(0, 0, v)
+        const v = await dragged.valuePromise
+        explorer.setLatent(x, y, v)
     }
 </script>
 
@@ -145,7 +145,7 @@ import { image } from '@tensorflow/tfjs';
         <div class="canvas-row">
         {#each [0, 1, 2] as y}
             <canvas bind:this={canvas[x][y]} on:click={onCanvasClick.bind(null, x, y)} on:wheel={onCanvasScroll} id={`canvas${x}-${y}`} width={1 * 64} height={1 * 64}
-            on:drop={handleDrop}
+            on:drop={handleDrop.bind(null, x, y)}
             ondragover="return false"></canvas>
         {/each}
         </div>

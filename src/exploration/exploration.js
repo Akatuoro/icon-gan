@@ -5,6 +5,7 @@ import {ImageNoise, Style} from './input'
 import {BatchGenerator2D, BatchGenerator2DAIO, BatchExecutor} from './batch'
 import {exposed} from './exposed'
 import { DirectionExplorer } from './direction-explorer';
+import { transferBay } from './transfer';
 
 
 class Central {
@@ -185,8 +186,36 @@ export class Exploration {
         }
     }
 
-    setDirection(x, y, v) {
-        this.vx = tf.tensor(v)
+    async setLatent(x, y, transferIndex) {
+        const style = tf.tidy(() => transferBay[transferIndex].getValue())
+        const center = (this.n-1)/2
+        if (x !== center || y !== center) {
+            const dx = x - center / center
+            const dy = y - center / center
+
+            tf.tidy(() =>{
+                let v = this.style.sub(style)[0].reshape([-1]).div(this.scale).mul(-1)
+
+                if (dx === 0) {
+                    this.vy = v.mul(dy)
+                }
+                else if (dy === 0) {
+                    this.vx = v.mul(dx)
+                }
+                else {
+                    const fix = this.vx.mul(-dx).add(this.vy.mul(dy))
+
+                    this.vy = v.add(fix).div(2 * dy)
+                    this.vx = v.sub(fix).div(2 * dx)
+                }
+
+                tf.keep(this.vx)
+                tf.keep(this.vy)
+            })
+        }
+        else {
+            this.style = style
+        }
         this.update()
     }
 

@@ -2,6 +2,8 @@ import * as tf from '@tensorflow/tfjs';
 
 import {getModel, toImg} from './model'
 import {BatchExecutor} from './batch'
+import {exposed} from './exposed'
+import { transferBay, TransferContainer } from './transfer';
 
 export class DirectionExplorer {
     init(options, central) {
@@ -22,6 +24,14 @@ export class DirectionExplorer {
 
     getV(i) {
         return this.v[i].arraySync()
+    }
+
+    getLatent(i) {
+        return this.central.style.move(this.v[i].mul(this.central.scale))
+    }
+
+    transferLatent(i) {
+        return transferBay.push(new TransferContainer(this.getLatent.bind(this, i), style => style.arraySync())) - 1
     }
 
     async update() {

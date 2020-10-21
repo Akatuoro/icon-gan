@@ -23,6 +23,10 @@ export class Style extends Array {
         }
     }
 
+    sub(style) {
+        return this.map((val, i) => tf.sub(val, style[i]))
+    }
+
     move(v) {
         return this.map(val => tf.add(val, tf.expandDims(v, 0)))
     }
