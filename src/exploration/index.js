@@ -22,24 +22,16 @@ export const useWorker = () => {
 }
 
 
-export const explore = async options => {
+export const explore = async () => {
     if (useWorker()) {
-        console.log('using worker')
-        const explorer = Comlink.wrap(new Worker('dist/exploration-worker.js'))
-
-        // proxy should ideally be released at some point
-        const onUpdate = Comlink.proxy(options.onUpdate)
-        delete options.onUpdate
-        await explorer.init(options)
-
-        explorer.onUpdate = onUpdate
-        return explorer
+        console.info('using worker')
+        const exploration = Comlink.wrap(new Worker('dist/exploration-worker.js'))
+        return exploration
     }
     else {
-        console.log('not using worker')
-        const explorer = new Exploration()
-        await explorer.init(options)
-        return explorer
+        console.info('not using worker')
+        const exploration = new Exploration()
+        return exploration
     }
 }
 

@@ -1,13 +1,13 @@
 import * as tf from '@tensorflow/tfjs';
 
+import {Explorer} from './explorer'
 import {getModel, toImg} from './model'
 import {BatchExecutor} from './batch'
-import {exposed} from './exposed'
 import { transferBay, TransferContainer } from './transfer';
 
-export class DirectionExplorer {
-    init(options, central) {
-        this.n = options.n
+export class DirectionExplorer extends Explorer {
+    init({n = 9} = {}, central) {
+        this.n = n
 
         this.central = central
 
@@ -34,7 +34,7 @@ export class DirectionExplorer {
         return transferBay.push(new TransferContainer(this.getLatent.bind(this, i), style => style.arraySync())) - 1
     }
 
-    async update() {
+    update() {
         this.batchExecutor.iterable = this.batchDef
         this.batchExecutor.start(this.queueStep.bind(this))
     }
