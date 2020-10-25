@@ -30,6 +30,12 @@
     function detach(node) {
         node.parentNode.removeChild(node);
     }
+    function destroy_each(iterations, detaching) {
+        for (let i = 0; i < iterations.length; i += 1) {
+            if (iterations[i])
+                iterations[i].d(detaching);
+        }
+    }
     function element(name) {
         return document.createElement(name);
     }
@@ -62,7 +68,7 @@
     }
     function get_current_component() {
         if (!current_component)
-            throw new Error(`Function called outside component initialization`);
+            throw new Error('Function called outside component initialization');
         return current_component;
     }
     function onMount(fn) {
@@ -298,6 +304,565 @@
                 this.$$.skip_bound = false;
             }
         }
+    }
+
+    const subscriber_queue = [];
+    /**
+     * Create a `Writable` store that allows both updating and reading by subscription.
+     * @param {*=}value initial value
+     * @param {StartStopNotifier=}start start and stop notifications for subscriptions
+     */
+    function writable(value, start = noop) {
+        let stop;
+        const subscribers = [];
+        function set(new_value) {
+            if (safe_not_equal(value, new_value)) {
+                value = new_value;
+                if (stop) { // store is ready
+                    const run_queue = !subscriber_queue.length;
+                    for (let i = 0; i < subscribers.length; i += 1) {
+                        const s = subscribers[i];
+                        s[1]();
+                        subscriber_queue.push(s, value);
+                    }
+                    if (run_queue) {
+                        for (let i = 0; i < subscriber_queue.length; i += 2) {
+                            subscriber_queue[i][0](subscriber_queue[i + 1]);
+                        }
+                        subscriber_queue.length = 0;
+                    }
+                }
+            }
+        }
+        function update(fn) {
+            set(fn(value));
+        }
+        function subscribe(run, invalidate = noop) {
+            const subscriber = [run, invalidate];
+            subscribers.push(subscriber);
+            if (subscribers.length === 1) {
+                stop = start(set) || noop;
+            }
+            run(value);
+            return () => {
+                const index = subscribers.indexOf(subscriber);
+                if (index !== -1) {
+                    subscribers.splice(index, 1);
+                }
+                if (subscribers.length === 0) {
+                    stop();
+                    stop = null;
+                }
+            };
+        }
+        return { set, update, subscribe };
+    }
+
+    /**
+     * @license
+     * Copyright 2018 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const EPSILON_FLOAT32 = 1e-7;
+    const EPSILON_FLOAT16 = 1e-4;
+    /** Convenient class for storing tensor-related data. */
+    class DataStorage {
+        constructor(backend, dataMover) {
+            this.backend = backend;
+            this.dataMover = dataMover;
+            this.data = new WeakMap();
+            this.dataIdsCount = 0;
+        }
+        get(dataId) {
+            if (!this.data.has(dataId)) {
+                this.dataMover.moveData(this.backend, dataId);
+            }
+            return this.data.get(dataId);
+        }
+        set(dataId, value) {
+            this.dataIdsCount++;
+            this.data.set(dataId, value);
+        }
+        has(dataId) {
+            return this.data.has(dataId);
+        }
+        delete(dataId) {
+            this.dataIdsCount--;
+            return this.data.delete(dataId);
+        }
+        numDataIds() {
+            return this.dataIdsCount;
+        }
+    }
+    /**
+     * The interface that defines the kernels that should be implemented when
+     * adding a new backend. New backends don't need to implement every one of the
+     * methods, this can be done gradually (throw an error for unimplemented
+     * methods).
+     */
+    class KernelBackend {
+        time(f) {
+            return notYetImplemented('time');
+        }
+        read(dataId) {
+            return notYetImplemented('read');
+        }
+        readSync(dataId) {
+            return notYetImplemented('readSync');
+        }
+        numDataIds() {
+            return notYetImplemented('numDataIds');
+        }
+        disposeData(dataId) {
+            return notYetImplemented('disposeData');
+        }
+        write(values, shape, dtype) {
+            return notYetImplemented('write');
+        }
+        move(dataId, values, shape, dtype) {
+            return notYetImplemented('move');
+        }
+        memory() {
+            return notYetImplemented('memory');
+        }
+        /** Returns the highest precision for floats in bits (e.g. 16 or 32) */
+        floatPrecision() {
+            return notYetImplemented('floatPrecision');
+        }
+        /** Returns the smallest representable number.  */
+        epsilon() {
+            return this.floatPrecision() === 32 ? EPSILON_FLOAT32 : EPSILON_FLOAT16;
+        }
+        batchMatMul(a, b, transposeA, transposeB) {
+            return notYetImplemented('batchMatMul');
+        }
+        fusedBatchMatMul({ a, b, transposeA, transposeB, bias, activation, preluActivationWeights }) {
+            return notYetImplemented('fusedBatchMatMul');
+        }
+        slice(x, begin, size) {
+            return notYetImplemented('slice');
+        }
+        stridedSlice(x, begin, end, strides) {
+            return notYetImplemented('stridedSlice');
+        }
+        unstack(x, axis) {
+            return notYetImplemented('unstack');
+        }
+        reverse(a, axis) {
+            return notYetImplemented('reverse');
+        }
+        concat(tensors, axis) {
+            return notYetImplemented('concat');
+        }
+        neg(a) {
+            return notYetImplemented('neg');
+        }
+        add(a, b) {
+            return notYetImplemented('add');
+        }
+        addN(tensors) {
+            return notYetImplemented('addN');
+        }
+        subtract(a, b) {
+            return notYetImplemented('subtract');
+        }
+        multiply(a, b) {
+            return notYetImplemented('multiply');
+        }
+        realDivide(a, b) {
+            return notYetImplemented('realDivide');
+        }
+        floorDiv(a, b) {
+            return notYetImplemented('floorDiv');
+        }
+        sum(x, axes) {
+            return notYetImplemented('sum');
+        }
+        prod(x, axes) {
+            return notYetImplemented('prod');
+        }
+        unsortedSegmentSum(x, segmentIds, numSegments) {
+            return notYetImplemented('unsortedSegmentSum');
+        }
+        argMin(x, axis) {
+            return notYetImplemented('argMin');
+        }
+        argMax(x, axis) {
+            return notYetImplemented('argMax');
+        }
+        equal(a, b) {
+            return notYetImplemented('equal');
+        }
+        notEqual(a, b) {
+            return notYetImplemented('notEqual');
+        }
+        less(a, b) {
+            return notYetImplemented('less');
+        }
+        lessEqual(a, b) {
+            return notYetImplemented('lessEqual');
+        }
+        greater(a, b) {
+            return notYetImplemented('greater');
+        }
+        greaterEqual(a, b) {
+            return notYetImplemented('greaterEqual');
+        }
+        logicalNot(a) {
+            return notYetImplemented('logicalNot');
+        }
+        logicalAnd(a, b) {
+            return notYetImplemented('logicalAnd');
+        }
+        logicalOr(a, b) {
+            return notYetImplemented('logicalOr');
+        }
+        where(condition) {
+            return notYetImplemented('where');
+        }
+        select(condition, a, b) {
+            return notYetImplemented('select');
+        }
+        topk(x, k, sorted) {
+            return notYetImplemented('topk');
+        }
+        min(x, axes) {
+            return notYetImplemented('min');
+        }
+        minimum(a, b) {
+            return notYetImplemented('minimum');
+        }
+        mod(a, b) {
+            return notYetImplemented('mod');
+        }
+        max(x, axes) {
+            return notYetImplemented('max');
+        }
+        maximum(a, b) {
+            return notYetImplemented('maximum');
+        }
+        all(x, axes) {
+            return notYetImplemented('all');
+        }
+        any(x, axes) {
+            return notYetImplemented('any');
+        }
+        squaredDifference(a, b) {
+            return notYetImplemented('squaredDifference');
+        }
+        ceil(x) {
+            return notYetImplemented('ceil');
+        }
+        floor(x) {
+            return notYetImplemented('floor');
+        }
+        round(x) {
+            return notYetImplemented('round');
+        }
+        sign(x) {
+            return notYetImplemented('sign');
+        }
+        isNaN(x) {
+            return notYetImplemented('isNaN');
+        }
+        isInf(x) {
+            return notYetImplemented('isInf');
+        }
+        isFinite(x) {
+            return notYetImplemented('isFinite');
+        }
+        pow(a, b) {
+            return notYetImplemented('pow');
+        }
+        exp(x) {
+            return notYetImplemented('exp');
+        }
+        expm1(x) {
+            return notYetImplemented('expm1');
+        }
+        softmax(x, dim) {
+            return notYetImplemented('softmax');
+        }
+        log(x) {
+            return notYetImplemented('log');
+        }
+        log1p(x) {
+            return notYetImplemented('log1p');
+        }
+        sqrt(x) {
+            return notYetImplemented('sqrt');
+        }
+        rsqrt(x) {
+            return notYetImplemented('rsqrt');
+        }
+        square(x) {
+            return notYetImplemented('square');
+        }
+        reciprocal(x) {
+            return notYetImplemented('reciprocal');
+        }
+        relu(x) {
+            return notYetImplemented('relu');
+        }
+        relu6(x) {
+            return notYetImplemented('relu6');
+        }
+        prelu(x, a) {
+            return notYetImplemented('prelu');
+        }
+        elu(x) {
+            return notYetImplemented('elu');
+        }
+        eluDer(dy, y) {
+            return notYetImplemented('eluDer');
+        }
+        selu(x) {
+            return notYetImplemented('selu');
+        }
+        int(x) {
+            return notYetImplemented('int');
+        }
+        clip(x, min, max) {
+            return notYetImplemented('clip');
+        }
+        abs(x) {
+            return notYetImplemented('abs');
+        }
+        complexAbs(x) {
+            return notYetImplemented('complexAbs');
+        }
+        sigmoid(x) {
+            return notYetImplemented('sigmoid');
+        }
+        softplus(x) {
+            return notYetImplemented('softplus');
+        }
+        sin(x) {
+            return notYetImplemented('sin');
+        }
+        cos(x) {
+            return notYetImplemented('cos');
+        }
+        tan(x) {
+            return notYetImplemented('tan');
+        }
+        asin(x) {
+            return notYetImplemented('asin');
+        }
+        acos(x) {
+            return notYetImplemented('acos');
+        }
+        atan(x) {
+            return notYetImplemented('atan');
+        }
+        atan2(a, b) {
+            return notYetImplemented('atan2');
+        }
+        sinh(x) {
+            return notYetImplemented('sinh');
+        }
+        cosh(x) {
+            return notYetImplemented('cosh');
+        }
+        tanh(x) {
+            return notYetImplemented('tanh');
+        }
+        asinh(x) {
+            return notYetImplemented('asinh');
+        }
+        acosh(x) {
+            return notYetImplemented('acosh');
+        }
+        atanh(x) {
+            return notYetImplemented('atanh');
+        }
+        erf(x) {
+            return notYetImplemented('erf');
+        }
+        step(x, alpha) {
+            return notYetImplemented('step');
+        }
+        fusedConv2d({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
+            return notYetImplemented('fusedConv2d');
+        }
+        conv2d(x, filter, convInfo) {
+            return notYetImplemented('conv2d');
+        }
+        conv2dDerInput(dy, filter, convInfo) {
+            return notYetImplemented('conv2dDerInput');
+        }
+        conv2dDerFilter(x, dY, convInfo) {
+            return notYetImplemented('conv2dDerFilter');
+        }
+        fusedDepthwiseConv2D({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
+            return notYetImplemented('fusedDepthwiseConv2D');
+        }
+        depthwiseConv2D(input, filter, convInfo) {
+            return notYetImplemented('depthwiseConv2D');
+        }
+        depthwiseConv2DDerInput(dy, filter, convInfo) {
+            return notYetImplemented('depthwiseConv2DDerInput');
+        }
+        depthwiseConv2DDerFilter(x, dY, convInfo) {
+            return notYetImplemented('depthwiseConv2DDerFilter');
+        }
+        conv3d(x, filter, convInfo) {
+            return notYetImplemented('conv3d');
+        }
+        conv3dDerInput(dy, filter, convInfo) {
+            return notYetImplemented('conv3dDerInput');
+        }
+        conv3dDerFilter(x, dY, convInfo) {
+            return notYetImplemented('conv3dDerFilter');
+        }
+        maxPool(x, convInfo) {
+            return notYetImplemented('maxPool');
+        }
+        maxPoolBackprop(dy, x, y, convInfo) {
+            return notYetImplemented('maxPoolBackprop');
+        }
+        avgPool(x, convInfo) {
+            return notYetImplemented('avgPool');
+        }
+        avgPoolBackprop(dy, x, convInfo) {
+            return notYetImplemented('avgPoolBackprop');
+        }
+        avgPool3d(x, convInfo) {
+            return notYetImplemented('avgPool3d');
+        }
+        avgPool3dBackprop(dy, x, convInfo) {
+            return notYetImplemented('avgPool3dBackprop');
+        }
+        maxPool3d(x, convInfo) {
+            return notYetImplemented('maxPool3d');
+        }
+        maxPool3dBackprop(dy, x, y, convInfo) {
+            return notYetImplemented('maxPool3dBackprop');
+        }
+        reshape(x, shape) {
+            return notYetImplemented('reshape');
+        }
+        cast(x, dtype) {
+            return notYetImplemented('cast');
+        }
+        tile(x, reps) {
+            return notYetImplemented('tile');
+        }
+        pad(x, paddings, constantValue) {
+            return notYetImplemented('pad');
+        }
+        transpose(x, perm) {
+            return notYetImplemented('transpose');
+        }
+        gather(x, indices, axis) {
+            return notYetImplemented('gather');
+        }
+        gatherND(x, indices) {
+            return notYetImplemented('gatherND');
+        }
+        scatterND(indices, updates, shape) {
+            return notYetImplemented('scatterND');
+        }
+        batchToSpaceND(x, blockShape, crops) {
+            return notYetImplemented('batchToSpaceND');
+        }
+        spaceToBatchND(x, blockShape, paddings) {
+            return notYetImplemented('spaceToBatchND');
+        }
+        resizeBilinear(x, newHeight, newWidth, alignCorners) {
+            return notYetImplemented('resizeBilinear');
+        }
+        resizeBilinearBackprop(dy, x, alignCorners) {
+            return notYetImplemented('resizeBilinearBackprop');
+        }
+        resizeNearestNeighbor(x, newHEight, newWidth, alignCorners) {
+            return notYetImplemented('resizeNearestNeighbor');
+        }
+        resizeNearestNeighborBackprop(dy, x, alignCorners) {
+            return notYetImplemented('resizeNearestNeighborBackprop');
+        }
+        batchNorm(x, mean, variance, offset, scale, varianceEpsilon) {
+            return notYetImplemented('batchNorm');
+        }
+        localResponseNormalization4D(x, radius, bias, alpha, beta) {
+            return notYetImplemented('localResponseNormalization4D');
+        }
+        LRNGrad(dy, inputImage, outputImage, radius, bias, alpha, beta) {
+            return notYetImplemented('LRNGrad');
+        }
+        multinomial(logits, normalized, numSamples, seed) {
+            return notYetImplemented('multinomial');
+        }
+        oneHot(indices, depth, onValue, offValue) {
+            return notYetImplemented('oneHot');
+        }
+        cumsum(x, axis, exclusive, reverse) {
+            return notYetImplemented('cumsum');
+        }
+        nonMaxSuppression(boxes, scores, maxOutputSize, iouThreshold, scoreThreshold) {
+            return notYetImplemented('nonMaxSuppression');
+        }
+        fft(x) {
+            return notYetImplemented('fft');
+        }
+        ifft(x) {
+            return notYetImplemented('ifft');
+        }
+        complex(real, imag) {
+            return notYetImplemented('complex');
+        }
+        real(input) {
+            return notYetImplemented('real');
+        }
+        imag(input) {
+            return notYetImplemented('imag');
+        }
+        cropAndResize(image, boxes, boxIndex, cropSize, method, extrapolationValue) {
+            return notYetImplemented('cropAndResize');
+        }
+        depthToSpace(x, blockSize, dataFormat) {
+            return notYetImplemented('depthToSpace');
+        }
+        // Aligns with the "SplitV" kernel in TensorFlow.
+        split(value, sizeSplits, axis) {
+            return notYetImplemented('split');
+        }
+        sparseToDense(sparseIndices, sparseValues, outputShape, defaultValue) {
+            return notYetImplemented('sparseToDense');
+        }
+        diag(x) {
+            return notYetImplemented('diag');
+        }
+        fill(shape, value, dtype) {
+            return notYetImplemented('fill');
+        }
+        onesLike(x) {
+            return notYetImplemented('onesLike');
+        }
+        zerosLike(x) {
+            return notYetImplemented('zerosLike');
+        }
+        linspace(start, stop, num) {
+            return notYetImplemented('linspace');
+        }
+        dispose() {
+            return notYetImplemented('dispose');
+        }
+    }
+    function notYetImplemented(kernelName) {
+        throw new Error(`'${kernelName}' not yet implemented or not found in the registry. ` +
+            `This kernel may not be supported by the tfjs backend you have chosen`);
     }
 
     /**
@@ -668,6 +1233,7 @@
     const Tile = 'Tile';
     const TopK = 'TopK';
     const Transpose = 'Transpose';
+    const Unique = 'Unique';
     const Unpack = 'Unpack';
     const UnsortedSegmentSum = 'UnsortedSegmentSum';
     const ZerosLike = 'ZerosLike';
@@ -935,23 +1501,6 @@
     }
     function isInt(a) {
         return a % 1 === 0;
-    }
-    function tanh(x) {
-        // tslint:disable-next-line:no-any
-        if (Math.tanh != null) {
-            // tslint:disable-next-line:no-any
-            return Math.tanh(x);
-        }
-        if (x === Infinity) {
-            return 1;
-        }
-        else if (x === -Infinity) {
-            return -1;
-        }
-        else {
-            const e2x = Math.exp(2 * x);
-            return (e2x - 1) / (e2x + 1);
-        }
     }
     function sizeToSquarishShape(size) {
         const width = Math.ceil(Math.sqrt(size));
@@ -1223,6 +1772,15 @@
             strides[i] = strides[i + 1] * shape[i + 1];
         }
         return strides;
+    }
+    /**
+     * Create typed array for scalar value. Used for storing in `DataStorage`.
+     */
+    function createScalarValue(value, dtype) {
+        if (dtype === 'string') {
+            return encodeString(value);
+        }
+        return toTypedArray([value], dtype);
     }
     function toTypedArray(a, dtype) {
         if (dtype === 'string') {
@@ -2520,8 +3078,13 @@
             }
             try {
                 const backend = registryFactoryEntry.factory();
-                // Test if the factory returns a promise.
-                if (Promise.resolve(backend) === backend) {
+                /* Test if the factory returns a promise.
+                Done in a more liberal way than
+                previous 'Promise.resolve(backend)===backend'
+                as we needed to account for custom Promise
+                implementations (e.g. Angular) */
+                if (backend && !(backend instanceof KernelBackend)
+                    && typeof backend.then === 'function') {
                     const promiseId = ++this.pendingBackendInitId;
                     const success = backend
                         .then(backendInstance => {
@@ -5381,7 +5944,7 @@
                 const results = await this.loadWeights(weightsManifest);
                 [weightSpecs, weightData] = results;
             }
-            return {
+            const artifacts = {
                 modelTopology,
                 weightSpecs,
                 weightData,
@@ -5390,6 +5953,11 @@
                 convertedBy,
                 format
             };
+            const initializer = modelConfig.modelInitializer;
+            if (initializer) {
+                artifacts.modelInitializer = initializer;
+            }
+            return artifacts;
         }
         async loadWeights(weightsManifest) {
             const weightPath = Array.isArray(this.path) ? this.path[1] : this.path;
@@ -5594,11 +6162,11 @@
      */
     function reshape_(x, shape) {
         const $x = convertToTensor(x, 'x', 'reshape', null);
-        shape = inferFromImplicitShape(shape, $x.size);
-        assert($x.size === sizeFromShape(shape), () => 'new shape and old shape must have the same number of elements.');
         const inputs = { x: $x };
         const attrs = { shape };
         const forward = (backend, save) => {
+            shape = inferFromImplicitShape(shape, $x.size);
+            assert($x.size === sizeFromShape(shape), () => 'new shape and old shape must have the same number of elements.');
             save([$x]);
             return backend.reshape($x, shape);
         };
@@ -5944,12 +6512,13 @@
      * =============================================================================
      */
     function assertParamsValid(input, begin, size) {
-        assert(input.rank === begin.length, () => `Error in slice${input.rank}D: Length of begin ${begin} must ` +
-            `match the rank of the array (${input.rank}).`);
-        assert(input.rank === size.length, () => `Error in slice${input.rank}D: Length of size ${size} must ` +
-            `match the rank of the array (${input.rank}).`);
-        for (let i = 0; i < input.rank; ++i) {
-            assert(begin[i] + size[i] <= input.shape[i], () => `Error in slice${input.rank}D: begin[${i}] + size[${i}] ` +
+        const inputRank = input.shape.length;
+        assert(inputRank === begin.length, () => `Error in slice${inputRank}D: Length of begin ${begin} must ` +
+            `match the rank of the array (${inputRank}).`);
+        assert(inputRank === size.length, () => `Error in slice${inputRank}D: Length of size ${size} must ` +
+            `match the rank of the array (${inputRank}).`);
+        for (let i = 0; i < inputRank; ++i) {
+            assert(begin[i] + size[i] <= input.shape[i], () => `Error in slice${inputRank}D: begin[${i}] + size[${i}] ` +
                 `(${begin[i] + size[i]}) would overflow input.shape[${i}] (${input.shape[i]})`);
         }
     }
@@ -6180,11 +6749,12 @@
     function parseSliceParams(x, begin, size) {
         // The following logic allows for more ergonomic calls.
         let begin_;
+        const xRank = x.shape.length;
         if (typeof begin === 'number') {
-            begin_ = [begin, ...new Array(x.rank - 1).fill(0)];
+            begin_ = [begin, ...new Array(xRank - 1).fill(0)];
         }
-        else if (begin.length < x.rank) {
-            begin_ = begin.concat(new Array(x.rank - begin.length).fill(0));
+        else if (begin.length < xRank) {
+            begin_ = begin.concat(new Array(xRank - begin.length).fill(0));
         }
         else {
             begin_ = begin.slice();
@@ -6194,13 +6764,13 @@
         });
         let size_;
         if (size == null) {
-            size_ = new Array(x.rank).fill(-1);
+            size_ = new Array(xRank).fill(-1);
         }
         else if (typeof size === 'number') {
-            size_ = [size, ...new Array(x.rank - 1).fill(-1)];
+            size_ = [size, ...new Array(xRank - 1).fill(-1)];
         }
-        else if (size.length < x.rank) {
-            size_ = size.concat(new Array(x.rank - size.length).fill(-1));
+        else if (size.length < xRank) {
+            size_ = size.concat(new Array(xRank - size.length).fill(-1));
         }
         else {
             size_ = size;
@@ -8168,19 +8738,19 @@
                 }
             });
         }
-        const $axis = parseAxisParam(axis, $tensors[0].shape)[0];
-        const outShape = computeOutShape$1($tensors.map(t => t.shape), $axis);
-        if (sizeFromShape(outShape) === 0) {
-            return tensor([], outShape);
-        }
-        // Keep only non-empty tensors (ignore tensors with 0 in their shape).
-        $tensors = $tensors.filter(t => t.size > 0);
-        if ($tensors.length === 1) {
-            return $tensors[0];
-        }
-        const shapes = $tensors.map(t => t.shape);
-        assertParamsConsistent(shapes, $axis);
         const forward = (backend, save) => {
+            const $axis = parseAxisParam(axis, $tensors[0].shape)[0];
+            const outShape = computeOutShape$1($tensors.map(t => t.shape), $axis);
+            if (sizeFromShape(outShape) === 0) {
+                return tensor([], outShape);
+            }
+            // Keep only non-empty tensors (ignore tensors with 0 in their shape).
+            $tensors = $tensors.filter(t => t.size > 0);
+            if ($tensors.length === 1) {
+                return $tensors[0];
+            }
+            const shapes = $tensors.map(t => t.shape);
+            assertParamsConsistent(shapes, $axis);
             const res = backend.concat($tensors, $axis);
             save($tensors);
             return res;
@@ -8285,9 +8855,9 @@
         if ($x.rank === 0) {
             throw new Error('Slicing scalar is not possible');
         }
-        const [begin_, size_] = parseSliceParams($x, begin, size);
-        assertParamsValid($x, begin_, size_);
         const forward = (backend, save) => {
+            const [begin_, size_] = parseSliceParams($x, begin, size);
+            assertParamsValid($x, begin_, size_);
             save([$x]);
             return backend.slice($x, begin_, size_);
         };
@@ -8334,7 +8904,7 @@
             return y;
         }, inputs, null /* grad */, Tanh);
     }
-    const tanh$1 = op({ tanh_ });
+    const tanh = op({ tanh_ });
 
     /**
      * @license
@@ -16216,6 +16786,82 @@
      * =============================================================================
      */
     /**
+     * Finds unique elements along an axis of a tensor.
+     *
+     * It returns a tensor `values` containing all of the unique elements along the
+     * `axis` of the given tensor `x` in the same order that they occur along the
+     * `axis` in `x`; `x` does not need to be sorted. It also returns a tensor
+     * `indices` the same size as the number of the elements in `x` along the `axis`
+     * dimension. It contains the index in the unique output `values`.
+     *
+     * ```js
+     * // A 1-D tensor
+     * const a = tf.tensor1d([1, 1, 2, 4, 4, 4, 7, 8, 8]);
+     * const {values, indices} = tf.unique(a);
+     * values.print();   // [1, 2, 4, 7, 8,]
+     * indices.print();  // [0, 0, 1, 2, 2, 2, 3, 4, 4]
+     * ```
+     *
+     * ```js
+     * // A 2-D tensor with axis=0
+     * //
+     * // 'a' is: [[1, 0, 0],
+     * //          [1, 0, 0],
+     * //          [2, 0, 0]]
+     * const a = tf.tensor2d([[1, 0, 0], [1, 0, 0], [2, 0, 0]]);
+     * const {values, indices} = tf.unique(a, 0)
+     * values.print();   // [[1, 0, 0],
+     *                   //  [2, 0, 0]]
+     * indices.print();  // [0, 0, 1]
+     * ```
+     *
+     * ```js
+     * // A 2-D tensor with axis=1
+     * //
+     * // 'a' is: [[1, 0, 0],
+     * //          [1, 0, 0],
+     * //          [2, 0, 0]]
+     * const a = tf.tensor2d([[1, 0, 0], [1, 0, 0], [2, 0, 0]]);
+     * const {values, indices} = tf.unique(a, 1)
+     * values.print();   // [[1, 0],
+     *                   //  [1, 0],
+     *                   //  [2, 0]]
+     * indices.print();  // [0, 1, 1]
+     * ```
+     * @param x A tensor (int32, string, bool).
+     * @param axis The axis of the tensor to find the unique elements.
+     * @returns [uniqueElements, indices] (see above for details)
+     *
+     * @doc {heading: 'Operations', subheading: 'Evaluation'}
+     */
+    function unique_(x, axis = 0) {
+        // x can be of any dtype, thus null as the last argument.
+        const $x = convertToTensor(x, 'x', 'unique', null);
+        assert($x.rank > 0, () => 'The input tensor must be at least 1D');
+        const inputs = { x: $x };
+        const attrs = { axis };
+        const [values, indices] = ENGINE.runKernel(Unique, inputs, attrs);
+        return { values, indices };
+    }
+    const unique = op({ unique_ });
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
      * Computes the sum along segments of a `tf.Tensor`.
      *
      * ```js
@@ -20752,513 +21398,6 @@
             tensor(allTopKVals, outputShape, xDtype),
             tensor(allTopKIndices, outputShape, 'int32')
         ];
-    }
-
-    /**
-     * @license
-     * Copyright 2018 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    const EPSILON_FLOAT32 = 1e-7;
-    const EPSILON_FLOAT16 = 1e-4;
-    /** Convenient class for storing tensor-related data. */
-    class DataStorage {
-        constructor(backend, dataMover) {
-            this.backend = backend;
-            this.dataMover = dataMover;
-            this.data = new WeakMap();
-            this.dataIdsCount = 0;
-        }
-        get(dataId) {
-            if (!this.data.has(dataId)) {
-                this.dataMover.moveData(this.backend, dataId);
-            }
-            return this.data.get(dataId);
-        }
-        set(dataId, value) {
-            this.dataIdsCount++;
-            this.data.set(dataId, value);
-        }
-        has(dataId) {
-            return this.data.has(dataId);
-        }
-        delete(dataId) {
-            this.dataIdsCount--;
-            return this.data.delete(dataId);
-        }
-        numDataIds() {
-            return this.dataIdsCount;
-        }
-    }
-    /**
-     * The interface that defines the kernels that should be implemented when
-     * adding a new backend. New backends don't need to implement every one of the
-     * methods, this can be done gradually (throw an error for unimplemented
-     * methods).
-     */
-    class KernelBackend {
-        time(f) {
-            return notYetImplemented('time');
-        }
-        read(dataId) {
-            return notYetImplemented('read');
-        }
-        readSync(dataId) {
-            return notYetImplemented('readSync');
-        }
-        numDataIds() {
-            return notYetImplemented('numDataIds');
-        }
-        disposeData(dataId) {
-            return notYetImplemented('disposeData');
-        }
-        write(values, shape, dtype) {
-            return notYetImplemented('write');
-        }
-        move(dataId, values, shape, dtype) {
-            return notYetImplemented('move');
-        }
-        memory() {
-            return notYetImplemented('memory');
-        }
-        /** Returns the highest precision for floats in bits (e.g. 16 or 32) */
-        floatPrecision() {
-            return notYetImplemented('floatPrecision');
-        }
-        /** Returns the smallest representable number.  */
-        epsilon() {
-            return this.floatPrecision() === 32 ? EPSILON_FLOAT32 : EPSILON_FLOAT16;
-        }
-        batchMatMul(a, b, transposeA, transposeB) {
-            return notYetImplemented('batchMatMul');
-        }
-        fusedBatchMatMul({ a, b, transposeA, transposeB, bias, activation, preluActivationWeights }) {
-            return notYetImplemented('fusedBatchMatMul');
-        }
-        slice(x, begin, size) {
-            return notYetImplemented('slice');
-        }
-        stridedSlice(x, begin, end, strides) {
-            return notYetImplemented('stridedSlice');
-        }
-        unstack(x, axis) {
-            return notYetImplemented('unstack');
-        }
-        reverse(a, axis) {
-            return notYetImplemented('reverse');
-        }
-        concat(tensors, axis) {
-            return notYetImplemented('concat');
-        }
-        neg(a) {
-            return notYetImplemented('neg');
-        }
-        add(a, b) {
-            return notYetImplemented('add');
-        }
-        addN(tensors) {
-            return notYetImplemented('addN');
-        }
-        subtract(a, b) {
-            return notYetImplemented('subtract');
-        }
-        multiply(a, b) {
-            return notYetImplemented('multiply');
-        }
-        realDivide(a, b) {
-            return notYetImplemented('realDivide');
-        }
-        floorDiv(a, b) {
-            return notYetImplemented('floorDiv');
-        }
-        sum(x, axes) {
-            return notYetImplemented('sum');
-        }
-        prod(x, axes) {
-            return notYetImplemented('prod');
-        }
-        unsortedSegmentSum(x, segmentIds, numSegments) {
-            return notYetImplemented('unsortedSegmentSum');
-        }
-        argMin(x, axis) {
-            return notYetImplemented('argMin');
-        }
-        argMax(x, axis) {
-            return notYetImplemented('argMax');
-        }
-        equal(a, b) {
-            return notYetImplemented('equal');
-        }
-        notEqual(a, b) {
-            return notYetImplemented('notEqual');
-        }
-        less(a, b) {
-            return notYetImplemented('less');
-        }
-        lessEqual(a, b) {
-            return notYetImplemented('lessEqual');
-        }
-        greater(a, b) {
-            return notYetImplemented('greater');
-        }
-        greaterEqual(a, b) {
-            return notYetImplemented('greaterEqual');
-        }
-        logicalNot(a) {
-            return notYetImplemented('logicalNot');
-        }
-        logicalAnd(a, b) {
-            return notYetImplemented('logicalAnd');
-        }
-        logicalOr(a, b) {
-            return notYetImplemented('logicalOr');
-        }
-        where(condition) {
-            return notYetImplemented('where');
-        }
-        select(condition, a, b) {
-            return notYetImplemented('select');
-        }
-        topk(x, k, sorted) {
-            return notYetImplemented('topk');
-        }
-        min(x, axes) {
-            return notYetImplemented('min');
-        }
-        minimum(a, b) {
-            return notYetImplemented('minimum');
-        }
-        mod(a, b) {
-            return notYetImplemented('mod');
-        }
-        max(x, axes) {
-            return notYetImplemented('max');
-        }
-        maximum(a, b) {
-            return notYetImplemented('maximum');
-        }
-        all(x, axes) {
-            return notYetImplemented('all');
-        }
-        any(x, axes) {
-            return notYetImplemented('any');
-        }
-        squaredDifference(a, b) {
-            return notYetImplemented('squaredDifference');
-        }
-        ceil(x) {
-            return notYetImplemented('ceil');
-        }
-        floor(x) {
-            return notYetImplemented('floor');
-        }
-        round(x) {
-            return notYetImplemented('round');
-        }
-        sign(x) {
-            return notYetImplemented('sign');
-        }
-        isNaN(x) {
-            return notYetImplemented('isNaN');
-        }
-        isInf(x) {
-            return notYetImplemented('isInf');
-        }
-        isFinite(x) {
-            return notYetImplemented('isFinite');
-        }
-        pow(a, b) {
-            return notYetImplemented('pow');
-        }
-        exp(x) {
-            return notYetImplemented('exp');
-        }
-        expm1(x) {
-            return notYetImplemented('expm1');
-        }
-        softmax(x, dim) {
-            return notYetImplemented('softmax');
-        }
-        log(x) {
-            return notYetImplemented('log');
-        }
-        log1p(x) {
-            return notYetImplemented('log1p');
-        }
-        sqrt(x) {
-            return notYetImplemented('sqrt');
-        }
-        rsqrt(x) {
-            return notYetImplemented('rsqrt');
-        }
-        square(x) {
-            return notYetImplemented('square');
-        }
-        reciprocal(x) {
-            return notYetImplemented('reciprocal');
-        }
-        relu(x) {
-            return notYetImplemented('relu');
-        }
-        relu6(x) {
-            return notYetImplemented('relu6');
-        }
-        prelu(x, a) {
-            return notYetImplemented('prelu');
-        }
-        elu(x) {
-            return notYetImplemented('elu');
-        }
-        eluDer(dy, y) {
-            return notYetImplemented('eluDer');
-        }
-        selu(x) {
-            return notYetImplemented('selu');
-        }
-        int(x) {
-            return notYetImplemented('int');
-        }
-        clip(x, min, max) {
-            return notYetImplemented('clip');
-        }
-        abs(x) {
-            return notYetImplemented('abs');
-        }
-        complexAbs(x) {
-            return notYetImplemented('complexAbs');
-        }
-        sigmoid(x) {
-            return notYetImplemented('sigmoid');
-        }
-        softplus(x) {
-            return notYetImplemented('softplus');
-        }
-        sin(x) {
-            return notYetImplemented('sin');
-        }
-        cos(x) {
-            return notYetImplemented('cos');
-        }
-        tan(x) {
-            return notYetImplemented('tan');
-        }
-        asin(x) {
-            return notYetImplemented('asin');
-        }
-        acos(x) {
-            return notYetImplemented('acos');
-        }
-        atan(x) {
-            return notYetImplemented('atan');
-        }
-        atan2(a, b) {
-            return notYetImplemented('atan2');
-        }
-        sinh(x) {
-            return notYetImplemented('sinh');
-        }
-        cosh(x) {
-            return notYetImplemented('cosh');
-        }
-        tanh(x) {
-            return notYetImplemented('tanh');
-        }
-        asinh(x) {
-            return notYetImplemented('asinh');
-        }
-        acosh(x) {
-            return notYetImplemented('acosh');
-        }
-        atanh(x) {
-            return notYetImplemented('atanh');
-        }
-        erf(x) {
-            return notYetImplemented('erf');
-        }
-        step(x, alpha) {
-            return notYetImplemented('step');
-        }
-        fusedConv2d({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
-            return notYetImplemented('fusedConv2d');
-        }
-        conv2d(x, filter, convInfo) {
-            return notYetImplemented('conv2d');
-        }
-        conv2dDerInput(dy, filter, convInfo) {
-            return notYetImplemented('conv2dDerInput');
-        }
-        conv2dDerFilter(x, dY, convInfo) {
-            return notYetImplemented('conv2dDerFilter');
-        }
-        fusedDepthwiseConv2D({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
-            return notYetImplemented('fusedDepthwiseConv2D');
-        }
-        depthwiseConv2D(input, filter, convInfo) {
-            return notYetImplemented('depthwiseConv2D');
-        }
-        depthwiseConv2DDerInput(dy, filter, convInfo) {
-            return notYetImplemented('depthwiseConv2DDerInput');
-        }
-        depthwiseConv2DDerFilter(x, dY, convInfo) {
-            return notYetImplemented('depthwiseConv2DDerFilter');
-        }
-        conv3d(x, filter, convInfo) {
-            return notYetImplemented('conv3d');
-        }
-        conv3dDerInput(dy, filter, convInfo) {
-            return notYetImplemented('conv3dDerInput');
-        }
-        conv3dDerFilter(x, dY, convInfo) {
-            return notYetImplemented('conv3dDerFilter');
-        }
-        maxPool(x, convInfo) {
-            return notYetImplemented('maxPool');
-        }
-        maxPoolBackprop(dy, x, y, convInfo) {
-            return notYetImplemented('maxPoolBackprop');
-        }
-        avgPool(x, convInfo) {
-            return notYetImplemented('avgPool');
-        }
-        avgPoolBackprop(dy, x, convInfo) {
-            return notYetImplemented('avgPoolBackprop');
-        }
-        avgPool3d(x, convInfo) {
-            return notYetImplemented('avgPool3d');
-        }
-        avgPool3dBackprop(dy, x, convInfo) {
-            return notYetImplemented('avgPool3dBackprop');
-        }
-        maxPool3d(x, convInfo) {
-            return notYetImplemented('maxPool3d');
-        }
-        maxPool3dBackprop(dy, x, y, convInfo) {
-            return notYetImplemented('maxPool3dBackprop');
-        }
-        reshape(x, shape) {
-            return notYetImplemented('reshape');
-        }
-        cast(x, dtype) {
-            return notYetImplemented('cast');
-        }
-        tile(x, reps) {
-            return notYetImplemented('tile');
-        }
-        pad(x, paddings, constantValue) {
-            return notYetImplemented('pad');
-        }
-        transpose(x, perm) {
-            return notYetImplemented('transpose');
-        }
-        gather(x, indices, axis) {
-            return notYetImplemented('gather');
-        }
-        gatherND(x, indices) {
-            return notYetImplemented('gatherND');
-        }
-        scatterND(indices, updates, shape) {
-            return notYetImplemented('scatterND');
-        }
-        batchToSpaceND(x, blockShape, crops) {
-            return notYetImplemented('batchToSpaceND');
-        }
-        spaceToBatchND(x, blockShape, paddings) {
-            return notYetImplemented('spaceToBatchND');
-        }
-        resizeBilinear(x, newHeight, newWidth, alignCorners) {
-            return notYetImplemented('resizeBilinear');
-        }
-        resizeBilinearBackprop(dy, x, alignCorners) {
-            return notYetImplemented('resizeBilinearBackprop');
-        }
-        resizeNearestNeighbor(x, newHEight, newWidth, alignCorners) {
-            return notYetImplemented('resizeNearestNeighbor');
-        }
-        resizeNearestNeighborBackprop(dy, x, alignCorners) {
-            return notYetImplemented('resizeNearestNeighborBackprop');
-        }
-        batchNorm(x, mean, variance, offset, scale, varianceEpsilon) {
-            return notYetImplemented('batchNorm');
-        }
-        localResponseNormalization4D(x, radius, bias, alpha, beta) {
-            return notYetImplemented('localResponseNormalization4D');
-        }
-        LRNGrad(dy, inputImage, outputImage, radius, bias, alpha, beta) {
-            return notYetImplemented('LRNGrad');
-        }
-        multinomial(logits, normalized, numSamples, seed) {
-            return notYetImplemented('multinomial');
-        }
-        oneHot(indices, depth, onValue, offValue) {
-            return notYetImplemented('oneHot');
-        }
-        cumsum(x, axis, exclusive, reverse) {
-            return notYetImplemented('cumsum');
-        }
-        nonMaxSuppression(boxes, scores, maxOutputSize, iouThreshold, scoreThreshold) {
-            return notYetImplemented('nonMaxSuppression');
-        }
-        fft(x) {
-            return notYetImplemented('fft');
-        }
-        ifft(x) {
-            return notYetImplemented('ifft');
-        }
-        complex(real, imag) {
-            return notYetImplemented('complex');
-        }
-        real(input) {
-            return notYetImplemented('real');
-        }
-        imag(input) {
-            return notYetImplemented('imag');
-        }
-        cropAndResize(image, boxes, boxIndex, cropSize, method, extrapolationValue) {
-            return notYetImplemented('cropAndResize');
-        }
-        depthToSpace(x, blockSize, dataFormat) {
-            return notYetImplemented('depthToSpace');
-        }
-        // Aligns with the "SplitV" kernel in TensorFlow.
-        split(value, sizeSplits, axis) {
-            return notYetImplemented('split');
-        }
-        sparseToDense(sparseIndices, sparseValues, outputShape, defaultValue) {
-            return notYetImplemented('sparseToDense');
-        }
-        diag(x) {
-            return notYetImplemented('diag');
-        }
-        fill(shape, value, dtype) {
-            return notYetImplemented('fill');
-        }
-        onesLike(x) {
-            return notYetImplemented('onesLike');
-        }
-        zerosLike(x) {
-            return notYetImplemented('zerosLike');
-        }
-        linspace(start, stop, num) {
-            return notYetImplemented('linspace');
-        }
-        dispose() {
-            return notYetImplemented('dispose');
-        }
-    }
-    function notYetImplemented(kernelName) {
-        throw new Error(`'${kernelName}' not yet implemented or not found in the registry. ` +
-            `Did you forget to import the kernel?`);
     }
 
     /**
@@ -27719,7 +27858,7 @@
      */
     Tensor.prototype.tanh = function () {
         this.throwIfDisposed();
-        return tanh$1(this);
+        return tanh(this);
     };
 
     /**
@@ -27858,6 +27997,27 @@
     Tensor.prototype.transpose = function (perm) {
         this.throwIfDisposed();
         return transpose(this, perm);
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    Tensor.prototype.unique = function (axis) {
+        this.throwIfDisposed();
+        return unique(this, axis);
     };
 
     /**
@@ -28317,7 +28477,7 @@
      * @param xs Array.
      * @returns An Array consisting of the unique elements in `xs`.
      */
-    function unique(xs) {
+    function unique$1(xs) {
         if (xs == null) {
             return xs;
         }
@@ -32825,7 +32985,7 @@
 
     /** @license See the LICENSE file. */
     // This code is auto-generated, do not modify this file!
-    const version = '2.4.0';
+    const version = '2.6.0';
 
     /**
      * @license
@@ -33306,13 +33466,13 @@
                 this.outputs = [args.outputs];
             }
             // Check for redundancy in inputs.
-            if (unique(this.inputs).length !== this.inputs.length) {
+            if (unique$1(this.inputs).length !== this.inputs.length) {
                 throw new ValueError('The list of inputs passed to the model is ' +
                     'redundant. All inputs should only appear once. Found: ' +
                     `${this.inputs.map(x => x.name)}`);
             }
             // Check for redundancy in outputs.
-            if (unique(this.outputs).length !== this.outputs.length) {
+            if (unique$1(this.outputs).length !== this.outputs.length) {
                 console.warn('The list of outputs passed to the model is redundant. ' +
                     'All outputs should only appear once. Found: ' +
                     `${this.outputs.map(x => x.name)}`);
@@ -35447,9 +35607,9 @@
      * @throws ValueError: in case of incorrectly formatted data.
      */
     function checkArrayLengths(inputs, targets, weights) {
-        const setX = unique(inputs.map(input => input.shape[0]));
+        const setX = unique$1(inputs.map(input => input.shape[0]));
         setX.sort();
-        const setY = unique(targets.map(target => target.shape[0]));
+        const setY = unique$1(targets.map(target => target.shape[0]));
         setY.sort();
         // TODO(cais): Check `weights` as well.
         if (setX.length > 1) {
@@ -37716,7 +37876,7 @@
      */
     class Tanh$1 extends Activation {
         apply(x) {
-            return tanh$1(x);
+            return tanh(x);
         }
     }
     /** @nocollapse */
@@ -37769,6 +37929,24 @@
     /** @nocollapse */
     LogSoftmax$1.className = 'logSoftmax';
     registerClass(LogSoftmax$1);
+    /**
+     * Swish activation function
+     */
+    class Swish extends Activation {
+        /**
+         * Calculate the activation function.
+         *
+         * @param x Tensor.
+         * @param alpha Scaling factor for the sigmoid function.
+         * @returns a Tensor of the same shape as x
+         */
+        apply(x, alpha = 1) {
+            return tidy(() => sigmoid(x.mul(alpha)).mul(x));
+        }
+    }
+    /** @nocollapse */
+    Swish.className = 'swish';
+    registerClass(Swish);
     function serializeActivation(activation) {
         return activation.getClassName();
     }
@@ -39639,6 +39817,7 @@
             }
         }
         getConfig() {
+            const baseConfig = super.getConfig();
             const config = {
                 returnSequences: this.returnSequences,
                 returnState: this.returnState,
@@ -39650,13 +39829,14 @@
                 config['numConstants'] = this.numConstants;
             }
             const cellConfig = this.cell.getConfig();
-            config['cell'] = {
-                'className': this.cell.getClassName(),
-                'config': cellConfig,
-            };
-            const baseConfig = super.getConfig();
-            Object.assign(config, baseConfig);
-            return config;
+            if (this.getClassName() === RNN.className) {
+                config['cell'] = {
+                    'className': this.cell.getClassName(),
+                    'config': cellConfig,
+                };
+            }
+            // this order is necessary, to prevent cell name from replacing layer name
+            return Object.assign({}, cellConfig, baseConfig, config);
         }
         /** @nocollapse */
         static fromConfig(cls, config, customObjects = {}) {
@@ -39775,6 +39955,7 @@
             });
         }
         getConfig() {
+            const baseConfig = super.getConfig();
             const config = {
                 units: this.units,
                 activation: serializeActivation(this.activation),
@@ -39792,9 +39973,7 @@
                 dropout: this.dropout,
                 recurrentDropout: this.recurrentDropout,
             };
-            const baseConfig = super.getConfig();
-            Object.assign(config, baseConfig);
-            return config;
+            return Object.assign({}, baseConfig, config);
         }
     }
     /** @nocollapse */
@@ -39821,73 +40000,6 @@
                 const initialState = kwargs == null ? null : kwargs['initialState'];
                 return super.call(inputs, { mask, training, initialState });
             });
-        }
-        // TODO(cais): Research possibility of refactoring out the tedious all
-        //   the getters that delegate to `this.cell` below.
-        get units() {
-            return this.cell.units;
-        }
-        get activation() {
-            return this.cell.activation;
-        }
-        get useBias() {
-            return this.cell.useBias;
-        }
-        get kernelInitializer() {
-            return this.cell.kernelInitializer;
-        }
-        get recurrentInitializer() {
-            return this.cell.recurrentInitializer;
-        }
-        get biasInitializer() {
-            return this.cell.biasInitializer;
-        }
-        get kernelRegularizer() {
-            return this.cell.kernelRegularizer;
-        }
-        get recurrentRegularizer() {
-            return this.cell.recurrentRegularizer;
-        }
-        get biasRegularizer() {
-            return this.cell.biasRegularizer;
-        }
-        get kernelConstraint() {
-            return this.cell.kernelConstraint;
-        }
-        get recurrentConstraint() {
-            return this.cell.recurrentConstraint;
-        }
-        get biasConstraint() {
-            return this.cell.biasConstraint;
-        }
-        get dropout() {
-            return this.cell.dropout;
-        }
-        get recurrentDropout() {
-            return this.cell.recurrentDropout;
-        }
-        getConfig() {
-            const config = {
-                units: this.units,
-                activation: serializeActivation(this.activation),
-                useBias: this.useBias,
-                kernelInitializer: serializeInitializer(this.kernelInitializer),
-                recurrentInitializer: serializeInitializer(this.recurrentInitializer),
-                biasInitializer: serializeInitializer(this.biasInitializer),
-                kernelRegularizer: serializeRegularizer(this.kernelRegularizer),
-                recurrentRegularizer: serializeRegularizer(this.recurrentRegularizer),
-                biasRegularizer: serializeRegularizer(this.biasRegularizer),
-                activityRegularizer: serializeRegularizer(this.activityRegularizer),
-                kernelConstraint: serializeConstraint(this.kernelConstraint),
-                recurrentConstraint: serializeConstraint(this.recurrentConstraint),
-                biasConstraint: serializeConstraint(this.biasConstraint),
-                dropout: this.dropout,
-                recurrentDropout: this.recurrentDropout,
-            };
-            const baseConfig = super.getConfig();
-            delete baseConfig['cell'];
-            Object.assign(config, baseConfig);
-            return config;
         }
         /** @nocollapse */
         static fromConfig(cls, config) {
@@ -40011,6 +40123,7 @@
             });
         }
         getConfig() {
+            const baseConfig = super.getConfig();
             const config = {
                 units: this.units,
                 activation: serializeActivation(this.activation),
@@ -40031,9 +40144,7 @@
                 implementation: this.implementation,
                 resetAfter: false
             };
-            const baseConfig = super.getConfig();
-            Object.assign(config, baseConfig);
-            return config;
+            return Object.assign({}, baseConfig, config);
         }
     }
     /** @nocollapse */
@@ -40064,80 +40175,6 @@
                 const initialState = kwargs == null ? null : kwargs['initialState'];
                 return super.call(inputs, { mask, training, initialState });
             });
-        }
-        get units() {
-            return this.cell.units;
-        }
-        get activation() {
-            return this.cell.activation;
-        }
-        get recurrentActivation() {
-            return this.cell.recurrentActivation;
-        }
-        get useBias() {
-            return this.cell.useBias;
-        }
-        get kernelInitializer() {
-            return this.cell.kernelInitializer;
-        }
-        get recurrentInitializer() {
-            return this.cell.recurrentInitializer;
-        }
-        get biasInitializer() {
-            return this.cell.biasInitializer;
-        }
-        get kernelRegularizer() {
-            return this.cell.kernelRegularizer;
-        }
-        get recurrentRegularizer() {
-            return this.cell.recurrentRegularizer;
-        }
-        get biasRegularizer() {
-            return this.cell.biasRegularizer;
-        }
-        get kernelConstraint() {
-            return this.cell.kernelConstraint;
-        }
-        get recurrentConstraint() {
-            return this.cell.recurrentConstraint;
-        }
-        get biasConstraint() {
-            return this.cell.biasConstraint;
-        }
-        get dropout() {
-            return this.cell.dropout;
-        }
-        get recurrentDropout() {
-            return this.cell.recurrentDropout;
-        }
-        get implementation() {
-            return this.cell.implementation;
-        }
-        getConfig() {
-            const config = {
-                units: this.units,
-                activation: serializeActivation(this.activation),
-                recurrentActivation: serializeActivation(this.recurrentActivation),
-                useBias: this.useBias,
-                kernelInitializer: serializeInitializer(this.kernelInitializer),
-                recurrentInitializer: serializeInitializer(this.recurrentInitializer),
-                biasInitializer: serializeInitializer(this.biasInitializer),
-                kernelRegularizer: serializeRegularizer(this.kernelRegularizer),
-                recurrentRegularizer: serializeRegularizer(this.recurrentRegularizer),
-                biasRegularizer: serializeRegularizer(this.biasRegularizer),
-                activityRegularizer: serializeRegularizer(this.activityRegularizer),
-                kernelConstraint: serializeConstraint(this.kernelConstraint),
-                recurrentConstraint: serializeConstraint(this.recurrentConstraint),
-                biasConstraint: serializeConstraint(this.biasConstraint),
-                dropout: this.dropout,
-                recurrentDropout: this.recurrentDropout,
-                implementation: this.implementation,
-                resetAfter: false
-            };
-            const baseConfig = super.getConfig();
-            delete baseConfig['cell'];
-            Object.assign(config, baseConfig);
-            return config;
         }
         /** @nocollapse */
         static fromConfig(cls, config) {
@@ -40282,6 +40319,7 @@
             });
         }
         getConfig() {
+            const baseConfig = super.getConfig();
             const config = {
                 units: this.units,
                 activation: serializeActivation(this.activation),
@@ -40302,9 +40340,7 @@
                 recurrentDropout: this.recurrentDropout,
                 implementation: this.implementation,
             };
-            const baseConfig = super.getConfig();
-            Object.assign(config, baseConfig);
-            return config;
+            return Object.assign({}, baseConfig, config);
         }
     }
     /** @nocollapse */
@@ -40335,83 +40371,6 @@
                 const initialState = kwargs == null ? null : kwargs['initialState'];
                 return super.call(inputs, { mask, training, initialState });
             });
-        }
-        get units() {
-            return this.cell.units;
-        }
-        get activation() {
-            return this.cell.activation;
-        }
-        get recurrentActivation() {
-            return this.cell.recurrentActivation;
-        }
-        get useBias() {
-            return this.cell.useBias;
-        }
-        get kernelInitializer() {
-            return this.cell.kernelInitializer;
-        }
-        get recurrentInitializer() {
-            return this.cell.recurrentInitializer;
-        }
-        get biasInitializer() {
-            return this.cell.biasInitializer;
-        }
-        get unitForgetBias() {
-            return this.cell.unitForgetBias;
-        }
-        get kernelRegularizer() {
-            return this.cell.kernelRegularizer;
-        }
-        get recurrentRegularizer() {
-            return this.cell.recurrentRegularizer;
-        }
-        get biasRegularizer() {
-            return this.cell.biasRegularizer;
-        }
-        get kernelConstraint() {
-            return this.cell.kernelConstraint;
-        }
-        get recurrentConstraint() {
-            return this.cell.recurrentConstraint;
-        }
-        get biasConstraint() {
-            return this.cell.biasConstraint;
-        }
-        get dropout() {
-            return this.cell.dropout;
-        }
-        get recurrentDropout() {
-            return this.cell.recurrentDropout;
-        }
-        get implementation() {
-            return this.cell.implementation;
-        }
-        getConfig() {
-            const config = {
-                units: this.units,
-                activation: serializeActivation(this.activation),
-                recurrentActivation: serializeActivation(this.recurrentActivation),
-                useBias: this.useBias,
-                kernelInitializer: serializeInitializer(this.kernelInitializer),
-                recurrentInitializer: serializeInitializer(this.recurrentInitializer),
-                biasInitializer: serializeInitializer(this.biasInitializer),
-                unitForgetBias: this.unitForgetBias,
-                kernelRegularizer: serializeRegularizer(this.kernelRegularizer),
-                recurrentRegularizer: serializeRegularizer(this.recurrentRegularizer),
-                biasRegularizer: serializeRegularizer(this.biasRegularizer),
-                activityRegularizer: serializeRegularizer(this.activityRegularizer),
-                kernelConstraint: serializeConstraint(this.kernelConstraint),
-                recurrentConstraint: serializeConstraint(this.recurrentConstraint),
-                biasConstraint: serializeConstraint(this.biasConstraint),
-                dropout: this.dropout,
-                recurrentDropout: this.recurrentDropout,
-                implementation: this.implementation,
-            };
-            const baseConfig = super.getConfig();
-            delete baseConfig['cell'];
-            Object.assign(config, baseConfig);
-            return config;
         }
         /** @nocollapse */
         static fromConfig(cls, config) {
@@ -40508,17 +40467,16 @@
             this.built = true;
         }
         getConfig() {
-            const cellConfigs = [];
-            for (const cell of this.cells) {
-                cellConfigs.push({
+            const baseConfig = super.getConfig();
+            const getCellConfig = (cell) => {
+                return {
                     'className': cell.getClassName(),
                     'config': cell.getConfig(),
-                });
-            }
+                };
+            };
+            const cellConfigs = this.cells.map(getCellConfig);
             const config = { 'cells': cellConfigs };
-            const baseConfig = super.getConfig();
-            Object.assign(config, baseConfig);
-            return config;
+            return Object.assign({}, baseConfig, config);
         }
         /** @nocollapse */
         static fromConfig(cls, config, customObjects = {}) {
@@ -40597,6 +40555,15 @@
         return masks.map(m => keep(m.clone()));
     }
 
+    /**
+     * @license
+     * Copyright 2020 Google LLC
+     *
+     * Use of this source code is governed by an MIT-style
+     * license that can be found in the LICENSE file or at
+     * https://opensource.org/licenses/MIT.
+     * =============================================================================
+     */
     var __rest = (undefined && undefined.__rest) || function (s, e) {
         var t = {};
         for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
@@ -40738,12 +40705,6 @@
                 this.states_ = this.states_.map(state => keep(state.clone()));
             });
         }
-        getConfig() {
-            const _a = super.getConfig(), config = __rest(_a, ['cell']);
-            const cellConfig = this.cell.getConfig();
-            // this order is necessary, to prevent cell name from replacing layer name
-            return Object.assign({}, cellConfig, config);
-        }
         computeSingleOutputShape(inputShape) {
             const { dataFormat, filters, kernelSize, padding, strides, dilationRate } = this.cell;
             const isChannelsFirst = dataFormat === 'channelsFirst';
@@ -40767,15 +40728,15 @@
             this.filters = filters;
             assertPositiveInteger(this.filters, 'filters');
             this.kernelSize = normalizeArray(kernelSize, 2, 'kernelSize');
-            this.kernelSize.map(size => assertPositiveInteger(size, 'kernelSize'));
+            this.kernelSize.forEach(size => assertPositiveInteger(size, 'kernelSize'));
             this.strides = normalizeArray(strides || 1, 2, 'strides');
-            this.strides.map(stride => assertPositiveInteger(stride, 'strides'));
+            this.strides.forEach(stride => assertPositiveInteger(stride, 'strides'));
             this.padding = padding || 'valid';
             checkPaddingMode(this.padding);
             this.dataFormat = dataFormat || 'channelsLast';
             checkDataFormat(this.dataFormat);
             this.dilationRate = normalizeArray(dilationRate || 1, 2, 'dilationRate');
-            this.dilationRate.map(rate => assertPositiveInteger(rate, 'dilationRate'));
+            this.dilationRate.forEach(rate => assertPositiveInteger(rate, 'dilationRate'));
         }
         build(inputShape) {
             var _a;
@@ -40888,6 +40849,7 @@
                 padding: this.padding,
                 dataFormat: this.dataFormat,
                 dilationRate: this.dilationRate,
+                strides: this.strides,
             };
             return Object.assign({}, baseConfig, config);
         }
@@ -41580,7 +41542,7 @@
                     batchSizes.push(shape[0]);
                 }
             }
-            batchSizes = unique(batchSizes);
+            batchSizes = unique$1(batchSizes);
             if (batchSizes.length > 1) {
                 throw new ValueError(`Can not merge tensors with different batch sizes. ` +
                     `Got tensors with shapes: ${JSON.stringify(inputShape)}.`);
@@ -41594,7 +41556,7 @@
             // broadcastable.
             const allRanks = inputShape.map(shape => shape.length);
             if (inputShape.indexOf(null) === -1 &&
-                unique(allRanks).length === 1) {
+                unique$1(allRanks).length === 1) {
                 this.reshapeRequired = false;
             }
             else {
@@ -41691,7 +41653,7 @@
                     batchSizes.push(shape[0]);
                 }
             }
-            batchSizes = unique(batchSizes);
+            batchSizes = unique$1(batchSizes);
             if (batchSizes.length === 1) {
                 outputShape = batchSizes.concat(outputShape);
             }
@@ -42571,7 +42533,7 @@
                     throw new Error(`Invalid axis: ${axis}`);
                 }
             }
-            if (this.axis.length !== unique(this.axis).length) {
+            if (this.axis.length !== unique$1(this.axis).length) {
                 throw new Error(`Found duplicate axes in: ${this.axis}`);
             }
             const paramShape = this.axis.map(axis => inputShape[axis]);
@@ -45655,7 +45617,8 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$6 = [{
+    const json$6 = [
+        {
             'tfOpName': 'TopKV2',
             'category': 'evaluation',
             'inputs': [
@@ -45663,7 +45626,23 @@
                 { 'start': 1, 'name': 'k', 'type': 'number' },
             ],
             'attrs': [{ 'tfName': 'sorted', 'name': 'sorted', 'type': 'bool' }]
-        }];
+        },
+        {
+            'tfOpName': 'Unique',
+            'category': 'evaluation',
+            'inputs': [
+                { 'start': 0, 'name': 'x', 'type': 'tensor' },
+            ],
+        },
+        {
+            'tfOpName': 'UniqueV2',
+            'category': 'evaluation',
+            'inputs': [
+                { 'start': 0, 'name': 'x', 'type': 'tensor' },
+                { 'start': 1, 'name': 'axis', 'type': 'number' },
+            ],
+        },
+    ];
 
     var evaluation = /*#__PURE__*/Object.freeze({
         __proto__: null,
@@ -46863,19 +46842,23 @@
                 return map;
             }, {});
         }
-        // Converts the model from Tensorflow GraphDef to local representation for
-        // TensorFlow.js API
+        // Converts the model inference graph from Tensorflow GraphDef to local
+        // representation for TensorFlow.js API
         transformGraph(graph, signature = {}) {
             const tfNodes = graph.node;
             const placeholders = [];
             const weights = [];
+            const initNodes = [];
             const nodes = tfNodes.reduce((map, node) => {
                 map[node.name] = this.mapNode(node);
                 if (node.op.startsWith('Placeholder')) {
                     placeholders.push(map[node.name]);
                 }
-                if (node.op === 'Const') {
+                else if (node.op === 'Const') {
                     weights.push(map[node.name]);
+                }
+                else if (node.input == null || node.input.length === 0) {
+                    initNodes.push(map[node.name]);
                 }
                 return map;
             }, {});
@@ -46936,15 +46919,11 @@
                     return functions;
                 }, {});
             }
-            return {
-                nodes,
-                inputs,
-                outputs,
-                weights,
-                placeholders,
-                signature,
-                functions
-            };
+            const result = { nodes, inputs, outputs, weights, placeholders, signature, functions };
+            if (initNodes.length > 0) {
+                result.initNodes = initNodes;
+            }
+            return result;
         }
         mapSignatureEntries(entries) {
             return Object.keys(entries || {})
@@ -47516,7 +47495,7 @@
                 return [square(getParamValue('x', node, tensorMap, context))];
             }
             case 'Tanh': {
-                return [tanh$1(getParamValue('x', node, tensorMap, context))];
+                return [tanh(getParamValue('x', node, tensorMap, context))];
             }
             case 'Tan':
                 return [tan(getParamValue('x', node, tensorMap, context))];
@@ -48726,6 +48705,17 @@
                 const result = topk(x, k, sorted);
                 return [result.values, result.indices];
             }
+            case 'Unique': {
+                const x = getParamValue('x', node, tensorMap, context);
+                const result = unique(x);
+                return [result.values, result.indices];
+            }
+            case 'UniqueV2': {
+                const x = getParamValue('x', node, tensorMap, context);
+                const axis = getParamValue('axis', node, tensorMap, context);
+                const result = unique(x, axis);
+                return [result.values, result.indices];
+            }
             default:
                 throw TypeError(`Node type ${node.op} is not implemented`);
         }
@@ -49512,7 +49502,7 @@
      * - Whether the subgraph contains dynamic ops (control flow, dynamic shape).
      * - Alternative inputs in order to avoid async (dynamic op) execution.
      */
-    function getExecutionSubgraph(inputs, outputs, weightMap) {
+    function getExecutionSubgraph(inputs, outputs, weightMap, initNodes) {
         const usedNodes = new Set();
         const missingInputs = [];
         let dynamicNode = null;
@@ -49521,6 +49511,10 @@
         // needed to compute those outputs.
         const seen = new Set();
         const inputNodeNames = Object.keys(inputs).map(name => parseNodeName(name)[0]);
+        let initNodeNames = [];
+        if (initNodes != null) {
+            initNodeNames = initNodes.map(node => parseNodeName(node.name)[0]);
+        }
         const frontier = [...outputs];
         while (frontier.length > 0) {
             const node = frontier.pop();
@@ -49538,6 +49532,10 @@
             }
             // This node is a dead end since it's one of the user-provided inputs.
             if (inputNodeNames.indexOf(node.name) !== -1) {
+                continue;
+            }
+            // This node is a dead end since it doesn't have any inputs.
+            if (initNodeNames.indexOf(node.name) !== -1) {
                 continue;
             }
             if (node.inputs.length === 0) {
@@ -49565,6 +49563,7 @@
         const inputNodes = Object.keys(inputs)
             .map(name => parseNodeName(name)[0])
             .map(name => graph.nodes[name]);
+        const initNodes = graph.initNodes;
         inputNodes.forEach(input => {
             if (usedNodes.has(input.name)) {
                 frontier.push(input);
@@ -49575,6 +49574,13 @@
                 frontier.push(weight);
             }
         });
+        if (initNodes != null) {
+            initNodes.forEach(node => {
+                if (usedNodes.has(node.name)) {
+                    frontier.push(node);
+                }
+            });
+        }
         const seen = new Set();
         const orderedNodes = [];
         while (frontier.length > 0) {
@@ -49641,6 +49647,7 @@
             this._functionExecutorMap = {};
             this._outputs = graph.outputs;
             this._inputs = graph.inputs;
+            this._initNodes = graph.initNodes;
             this._signature = graph.signature;
             this._functions = graph.functions;
             // create sub-graph executors
@@ -49718,7 +49725,7 @@
          * required for execution, in the correct execution order.
          */
         compile(inputs, outputs) {
-            const executionInfo = getExecutionSubgraph(inputs, outputs, this.weightMap);
+            const executionInfo = getExecutionSubgraph(inputs, outputs, this.weightMap, this._initNodes);
             const { missingInputs, dynamicNode, syncInputs } = executionInfo;
             if (dynamicNode != null) {
                 throw new Error(`This execution contains the node '${dynamicNode.name}', which has ` +
@@ -49751,7 +49758,12 @@
             outputs = this.mapOutputs(outputs);
             this.checkOutputs(outputs);
             const inputNodes = names.map(name => this.graph.nodes[parseNodeName(name)[0]]);
-            const outputNodes = outputs.map(name => this.graph.nodes[parseNodeName(name)[0]]);
+            const outputNodeNames = outputs.map(name => parseNodeName(name)[0]);
+            let outputNodes = outputNodeNames.map(name => this.graph.nodes[name]);
+            // If no outputs are specified, then use the default outputs of the model.
+            if (outputNodes.length === 0) {
+                outputNodes = this._outputs;
+            }
             const compilationKey = this.getCompilationKey(inputNodes, outputNodes);
             // Do nothing if the compiled graph cache contains the input.
             let orderedNodes = this.compiledMap.get(compilationKey);
@@ -49781,7 +49793,7 @@
                                 `Please use model.executeAsync() instead.`);
                         }
                         tensorsMap[node.name] = tensors;
-                        this.checkTensorForDisposal(node.name, node, tensorsMap, context, tensorsToKeep, outputs, intermediateTensorConsumerCount);
+                        this.checkTensorForDisposal(node.name, node, tensorsMap, context, tensorsToKeep, outputNodeNames, intermediateTensorConsumerCount);
                     }
                 }
                 // dispose the context for the root executor
@@ -49909,7 +49921,8 @@
         async executeWithControlFlow(inputs, context, outputNames, isFunctionExecution) {
             const names = Object.keys(inputs);
             const inputNodes = names.map(name => this.graph.nodes[parseNodeName(name)[0]]);
-            const outputNodes = outputNames.map(name => this.graph.nodes[parseNodeName(name)[0]]);
+            const outputNodeNames = outputNames.map(name => parseNodeName(name)[0]);
+            const outputNodes = outputNodeNames.map(name => this.graph.nodes[name]);
             const { usedNodes, missingInputs, dynamicNode, syncInputs } = getExecutionSubgraph(inputs, outputNodes, this.weightMap);
             const stack = [...inputNodes, ...this.graph.weights].map(node => {
                 return { node, contexts: context.currentContext };
@@ -49925,7 +49938,7 @@
             const tensorsToKeep = this.getFrozenTensorIds(tensorsMap);
             const added = {};
             while (stack.length > 0) {
-                const promises = this.processStack(inputNodes, stack, context, tensorsMap, added, tensorsToKeep, outputNames, intermediateTensorConsumerCount, usedNodes);
+                const promises = this.processStack(inputNodes, stack, context, tensorsMap, added, tensorsToKeep, outputNodeNames, intermediateTensorConsumerCount, usedNodes);
                 await Promise.all(promises);
             }
             if (dynamicNode == null && !isFunctionExecution) {
@@ -50188,7 +50201,7 @@
         }
         /**
          * Synchronously construct the in memory weight map and
-         * compile the inference graph.
+         * compile the inference graph. Also initialize hashtable if any.
          *
          * @doc {heading: 'Models', subheading: 'Classes', ignoreCI: true}
          */
@@ -50204,6 +50217,12 @@
             const weightMap = decodeWeights(this.artifacts.weightData, this.artifacts.weightSpecs);
             this.executor = new GraphExecutor(OperationMapper.Instance.transformGraph(graph, signature));
             this.executor.weightMap = this.convertTensorMapToTensorsMap(weightMap);
+            if (artifacts.modelInitializer != null) {
+                const initializer = OperationMapper.Instance.transformGraph(artifacts.modelInitializer);
+                this.initializer = new GraphExecutor(initializer);
+                this.initializer.weightMap = this.executor.weightMap;
+                this.initializer.execute({}, []);
+            }
             return true;
         }
         /**
@@ -50386,6 +50405,9 @@
          */
         dispose() {
             this.executor.dispose();
+            if (this.initializer) {
+                this.initializer.dispose();
+            }
         }
     }
     /**
@@ -50492,138 +50514,6 @@
 
     /**
      * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    function pool$1(xValues, xShape, dtype, strides, convInfo, poolType) {
-        const strideHeight = convInfo.strideHeight;
-        const strideWidth = convInfo.strideWidth;
-        const dilationHeight = convInfo.dilationHeight;
-        const dilationWidth = convInfo.dilationWidth;
-        const effectiveFilterHeight = convInfo.effectiveFilterHeight;
-        const effectiveFilterWidth = convInfo.effectiveFilterWidth;
-        const padTop = convInfo.padInfo.top;
-        const padLeft = convInfo.padInfo.left;
-        const initialValue = (poolType === 'max' ? Number.NEGATIVE_INFINITY :
-            Number.POSITIVE_INFINITY);
-        const output = buffer(convInfo.outShape, dtype);
-        const outputVals = output.values;
-        const outputBatchStrides = convInfo.outShape[1] * convInfo.outShape[2] * convInfo.outShape[3];
-        const outputRowStrides = convInfo.outShape[2] * convInfo.outShape[3];
-        const outputColStrides = convInfo.outShape[3];
-        for (let b = 0; b < convInfo.batchSize; ++b) {
-            const outputBatchOffset = b * outputBatchStrides;
-            const inputBatchOffset = b * strides[0];
-            for (let d = 0; d < convInfo.inChannels; ++d) {
-                for (let yR = 0; yR < convInfo.outHeight; ++yR) {
-                    const xRCorner = yR * strideHeight - padTop;
-                    const xRMin = Math.max(0, xRCorner);
-                    const xRMax = Math.min(convInfo.inHeight, effectiveFilterHeight + xRCorner);
-                    const outputRowOffset = outputBatchOffset + yR * outputRowStrides;
-                    for (let yC = 0; yC < convInfo.outWidth; ++yC) {
-                        const xCCorner = yC * strideWidth - padLeft;
-                        const xCMin = Math.max(0, xCCorner);
-                        const xCMax = Math.min(convInfo.inWidth, effectiveFilterWidth + xCCorner);
-                        let minMaxValue = initialValue;
-                        let avgValue = 0;
-                        let count = 0;
-                        for (let xR = xRMin; xR < xRMax; xR += dilationHeight) {
-                            const xROffset = inputBatchOffset + xR * strides[1];
-                            for (let xC = xCMin; xC < xCMax; xC += dilationWidth) {
-                                const xCOffset = xROffset + xC * strides[2];
-                                const pixel = xValues[xCOffset + d];
-                                if ((poolType === 'max' && pixel > minMaxValue)) {
-                                    minMaxValue = pixel;
-                                }
-                                else if (poolType === 'avg') {
-                                    avgValue += pixel;
-                                    count++;
-                                }
-                            }
-                            if (isNaN(minMaxValue)) {
-                                break;
-                            }
-                        }
-                        const outputOffset = outputRowOffset + yC * outputColStrides + d;
-                        outputVals[outputOffset] =
-                            poolType === 'avg' ? avgValue / count : minMaxValue;
-                    }
-                }
-            }
-        }
-        return output;
-    }
-    function maxPoolPositions(xValues, xShape, dtype, convInfo, flattenPositions = false, includeBatchInIndex = false) {
-        const maxPositions = buffer(convInfo.outShape, 'int32');
-        const strideHeight = convInfo.strideHeight;
-        const strideWidth = convInfo.strideWidth;
-        const dilationHeight = convInfo.dilationHeight;
-        const dilationWidth = convInfo.dilationWidth;
-        const effectiveFilterHeight = convInfo.effectiveFilterHeight;
-        const effectiveFilterWidth = convInfo.effectiveFilterWidth;
-        const padTop = convInfo.padInfo.top;
-        const padLeft = convInfo.padInfo.left;
-        const xBuf = buffer(xShape, dtype, xValues);
-        for (let b = 0; b < convInfo.batchSize; ++b) {
-            for (let d = 0; d < convInfo.inChannels; ++d) {
-                for (let yR = 0; yR < convInfo.outHeight; ++yR) {
-                    const xRCorner = yR * strideHeight - padTop;
-                    let xRMin = xRCorner;
-                    while (xRMin < 0) {
-                        xRMin += dilationHeight;
-                    }
-                    // const xRMin = Math.max(0, xRCorner);
-                    const xRMax = Math.min(convInfo.inHeight, effectiveFilterHeight + xRCorner);
-                    for (let yC = 0; yC < convInfo.outWidth; ++yC) {
-                        const xCCorner = yC * strideWidth - padLeft;
-                        let xCMin = xCCorner;
-                        while (xCMin < 0) {
-                            xCMin += dilationWidth;
-                        }
-                        const xCMax = Math.min(convInfo.inWidth, effectiveFilterWidth + xCCorner);
-                        let maxValue = Number.NEGATIVE_INFINITY;
-                        let maxPosition = -1;
-                        for (let xR = xRMin; xR < xRMax; xR += dilationHeight) {
-                            const wR = xR - xRCorner;
-                            for (let xC = xCMin; xC < xCMax; xC += dilationWidth) {
-                                const wC = xC - xCCorner;
-                                const pixel = xBuf.get(b, xR, xC, d);
-                                if (pixel > maxValue) {
-                                    maxValue = pixel;
-                                    if (flattenPositions) {
-                                        maxPosition = includeBatchInIndex ?
-                                            ((b * convInfo.inHeight + xR) * convInfo.inWidth + xC) *
-                                                convInfo.inChannels +
-                                                d :
-                                            (xR * convInfo.inWidth + xC) * convInfo.inChannels + d;
-                                    }
-                                    else {
-                                        maxPosition = wR * effectiveFilterWidth + wC;
-                                    }
-                                }
-                            }
-                        }
-                        maxPositions.set(maxPosition, b, yR, yC, d);
-                    }
-                }
-            }
-        }
-        return maxPositions;
-    }
-
-    /**
-     * @license
      * Copyright 2017 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -50651,7 +50541,7 @@
             return backend.relu(x);
         }
         else if (activation === 'elu') {
-            return backend.elu(x);
+            return elu(x);
         }
         else if (activation === 'relu6') {
             return backend.relu6(x);
@@ -50688,6 +50578,16 @@
             this.data.set(dataId, { values, dtype, refCount: 1 });
             return dataId;
         }
+        /**
+         * Create a data bucket in cpu backend.
+         * @param shape Shape of the `TensorInfo`.
+         * @param dtype DType of the `TensorInfo`.
+         * @param values The value of the `TensorInfo` stored as a flattened array.
+         */
+        makeTensorInfo(shape, dtype, values) {
+            const outId = this.write(values, shape, dtype);
+            return { dataId: outId, shape, dtype };
+        }
         /** Increase refCount of a `TensorData`. */
         incRef(dataId) {
             const tensorData = this.data.get(dataId);
@@ -50710,10 +50610,10 @@
             return this.readSync(dataId);
         }
         readSync(dataId) {
-            const { dtype, complexTensors } = this.data.get(dataId);
+            const { dtype, complexTensorInfos } = this.data.get(dataId);
             if (dtype === 'complex64') {
-                const realValues = this.readSync(complexTensors.real.dataId);
-                const imagValues = this.readSync(complexTensors.imag.dataId);
+                const realValues = this.readSync(complexTensorInfos.real.dataId);
+                const imagValues = this.readSync(complexTensorInfos.imag.dataId);
                 return mergeRealAndImagArrays(realValues, imagValues);
             }
             return this.data.get(dataId).values;
@@ -50738,10 +50638,10 @@
         }
         disposeData(dataId) {
             if (this.data.has(dataId)) {
-                const { complexTensors } = this.data.get(dataId);
-                if (complexTensors != null) {
-                    complexTensors.real.dispose();
-                    complexTensors.imag.dispose();
+                const { complexTensorInfos } = this.data.get(dataId);
+                if (complexTensorInfos != null) {
+                    this.disposeData(complexTensorInfos.real.dataId);
+                    this.disposeData(complexTensorInfos.imag.dataId);
                 }
                 this.data.delete(dataId);
             }
@@ -50769,44 +50669,6 @@
                 reasons: ['The reported memory is an upper bound. Due to automatic garbage ' +
                         'collection, the true allocated memory may be less.']
             };
-        }
-        complex(real, imag) {
-            const result = this.makeOutput(null, real.shape, 'complex64');
-            const resultData = this.data.get(result.dataId);
-            // The backend owns the reference to the underlying real and imaginary
-            // clones. These will explicitly get disposed when the complex tensor is
-            // disposed.
-            resultData.complexTensors = {
-                real: engine().keep(real.clone()),
-                imag: engine().keep(imag.clone())
-            };
-            return result;
-        }
-        real(input) {
-            const resultData = this.data.get(input.dataId);
-            return resultData.complexTensors.real.clone();
-        }
-        imag(input) {
-            const resultData = this.data.get(input.dataId);
-            return resultData.complexTensors.imag.clone();
-        }
-        slice(x, begin, size) {
-            assertNotComplex(x, 'slice');
-            const isContinous = isSliceContinous(x.shape, begin, size);
-            if (isContinous) {
-                const flatOffset = computeFlatOffset(begin, x.strides);
-                const length = sizeFromShape(size);
-                const vals = this.readSync(x.dataId);
-                return tensor(vals.subarray(flatOffset, flatOffset + length), size, x.dtype);
-            }
-            const buffer$1 = buffer(size, x.dtype);
-            const xBuf = this.bufferSync(x);
-            for (let i = 0; i < buffer$1.size; ++i) {
-                const loc = buffer$1.indexToLoc(i);
-                const xLoc = loc.map((idx, j) => idx + begin[j]);
-                buffer$1.values[i] = xBuf.get(...xLoc);
-            }
-            return buffer$1.toTensor();
         }
         stridedSlice(x, begin, end, strides) {
             assertNotComplex(x, 'stridedSlice');
@@ -50850,7 +50712,7 @@
             const res = new Array(num);
             for (let i = 0; i < res.length; i++) {
                 begin[axis] = i;
-                res[i] = this.slice(x, begin, size).reshape(outShape);
+                res[i] = slice(x, begin, size).reshape(outShape);
             }
             return res;
         }
@@ -50866,56 +50728,10 @@
             }
             return buffer$1.toTensor();
         }
-        concat(tensors, axis) {
-            if (tensors[0].dtype === 'complex64') {
-                const reals = tensors.map((t) => real(t));
-                const imags = tensors.map((t) => imag(t));
-                return complex(this.concat(reals, axis), this.concat(imags, axis));
-            }
-            const tensors2D = tensors.map(t => {
-                const innerSize = sizeFromShape(t.shape.slice(axis));
-                return t.as2D(-1, innerSize);
-            });
-            const outShape = computeOutShape$1(tensors2D.map(t => t.shape), 1 /* axis
-              */);
-            const values = buffer(outShape, tensors[0].dtype)
-                .values;
-            if (tensors2D[0].shape[0] === 1) {
-                // Use built-in TypedArray.set() method for speed.
-                let offset = 0;
-                tensors2D.forEach(t => {
-                    values.set(this.readSync(t.dataId), offset);
-                    offset += t.size;
-                });
-            }
-            else {
-                let colOffset = 0;
-                tensors2D.forEach(t => {
-                    const tVals = this.readSync(t.dataId);
-                    let tIdx = 0;
-                    for (let row = 0; row < t.shape[0]; ++row) {
-                        const resIdx = row * outShape[1] + colOffset;
-                        for (let col = 0; col < t.shape[1]; ++col) {
-                            values[resIdx + col] = tVals[tIdx++];
-                        }
-                    }
-                    colOffset += t.shape[1];
-                });
-            }
-            const finalOutShape = computeOutShape$1(tensors.map(t => t.shape), axis);
-            return tensor(values, finalOutShape, tensors[0].dtype);
-        }
         neg(x) {
             assertNotComplex(x, 'neg');
-            return this.multiply(scalar(-1), x);
-        }
-        add(a, b) {
-            if (a.dtype === 'complex64' || b.dtype === 'complex64') {
-                return this.broadcastedBinaryComplexOp(a.cast('complex64'), b.cast('complex64'), (aReal, aImag, bReal, bImag) => {
-                    return { real: aReal + bReal, imag: aImag + bImag };
-                });
-            }
-            return this.broadcastedBinaryOp(a, b, upcastType(a.dtype, b.dtype), (aValue, bValue) => aValue + bValue);
+            // TODO(lina128): Use mul directly once neg is modularized.
+            return mul(scalar(-1), x);
         }
         addN(tensors) {
             assertNotComplex(tensors, 'addN');
@@ -50936,20 +50752,13 @@
             // modularization.
             const maxLogit = max(logits, axes);
             const expandedShape = expandShapeToKeepDim(maxLogit.shape, axes);
-            const a = this.subtract(logits, maxLogit.reshape(expandedShape));
-            const b = this.exp(a);
+            // TODO(lina128): Use sub directly once softmax is modularized.
+            const a = sub(logits, maxLogit.reshape(expandedShape));
+            const b = exp(a);
             const sumExp = this.sum(b, axes).reshape(expandedShape);
             // TODO(annxingyuan): Call divImpl rather than op as part of softmax
             // kernel modularization.
             return div(b, sumExp);
-        }
-        subtract(a, b) {
-            if (a.dtype === 'complex64' || b.dtype === 'complex64') {
-                return this.broadcastedBinaryComplexOp(a.cast('complex64'), b.cast('complex64'), (aReal, aImag, bReal, bImag) => {
-                    return { real: aReal - bReal, imag: aImag - bImag };
-                });
-            }
-            return this.broadcastedBinaryOp(a, b, upcastType(a.dtype, b.dtype), (aValue, bValue) => aValue - bValue);
         }
         pow(a, b) {
             assertNotComplex([a, b], 'pow');
@@ -51000,24 +50809,14 @@
         fusedBatchMatMul({ a, b, transposeA, transposeB, bias, activation, preluActivationWeights }) {
             let result = this.batchMatMul(a, b, transposeA, transposeB);
             if (bias) {
-                result = this.add(result, bias);
+                // TODO(lina128): Use add directly once fusedBatchMatMul is modularized.
+                result = add$1(result, bias);
             }
             if (activation) {
                 result =
                     mapActivation(this, result, activation, preluActivationWeights);
             }
             return result;
-        }
-        multiply(a, b) {
-            if (a.dtype === 'complex64' || b.dtype === 'complex64') {
-                return this.broadcastedBinaryComplexOp(a.cast('complex64'), b.cast('complex64'), (aReal, aImag, bReal, bImag) => {
-                    return {
-                        real: aReal * bReal - aImag * bImag,
-                        imag: aReal * bImag + aImag * bReal
-                    };
-                });
-            }
-            return this.broadcastedBinaryOp(a, b, upcastType(a.dtype, b.dtype), (aValue, bValue) => aValue * bValue);
         }
         floorDiv(a, b) {
             assertNotComplex([a, b], 'floorDiv');
@@ -51192,15 +50991,6 @@
                 return (aVal >= bVal) ? 1 : 0;
             });
         }
-        logicalNot(x) {
-            assertNotComplex(x, 'logicalNot');
-            const values = this.readSync(x.dataId);
-            const newValues = new Uint8Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                newValues[i] = values[i] ? 0 : 1;
-            }
-            return this.makeOutput(newValues, x.shape, 'bool');
-        }
         logicalAnd(a, b) {
             assertNotComplex([a, b], 'logicalAnd');
             return this.broadcastedBinaryOp(a, b, 'bool', (aVal, bVal) => {
@@ -51332,165 +51122,6 @@
                 return diff * diff;
             });
         }
-        ceil(x) {
-            assertNotComplex(x, 'ceil');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                newValues[i] = Math.ceil(values[i]);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        floor(x) {
-            assertNotComplex(x, 'floor');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                newValues[i] = Math.floor(values[i]);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        sign(x) {
-            assertNotComplex(x, 'x');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                if (values[i] < 0) {
-                    newValues[i] = -1;
-                }
-                else if (values[i] > 0) {
-                    newValues[i] = 1;
-                }
-                else {
-                    newValues[i] = 0;
-                }
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        isNaN(x) {
-            assertNotComplex(x, 'x');
-            const values = this.readSync(x.dataId);
-            const newValues = new Uint8Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                if (Number.isNaN(values[i])) {
-                    newValues[i] = 1;
-                }
-            }
-            return this.makeOutput(newValues, x.shape, 'bool');
-        }
-        isInf(x) {
-            assertNotComplex(x, 'x');
-            const values = this.readSync(x.dataId);
-            const newValues = new Uint8Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                if (Math.abs(values[i]) === Infinity) {
-                    newValues[i] = 1;
-                }
-            }
-            return this.makeOutput(newValues, x.shape, 'bool');
-        }
-        isFinite(x) {
-            assertNotComplex(x, 'x');
-            const values = this.readSync(x.dataId);
-            const newValues = new Uint8Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                if (Number.isFinite(values[i])) {
-                    newValues[i] = 1;
-                }
-            }
-            return this.makeOutput(newValues, x.shape, 'bool');
-        }
-        round(x) {
-            assertNotComplex(x, 'round');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                // The algorithm is based on banker's rounding.
-                const base = Math.floor(values[i]);
-                if (values[i] - base < 0.5) {
-                    newValues[i] = Math.floor(values[i]);
-                }
-                else if (values[i] - base > 0.5) {
-                    newValues[i] = Math.ceil(values[i]);
-                }
-                else {
-                    if (base % 2.0 === 0.0) {
-                        newValues[i] = base;
-                    }
-                    else {
-                        newValues[i] = base + 1.0;
-                    }
-                }
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        exp(x) {
-            assertNotComplex(x, 'exp');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                newValues[i] = Math.exp(values[i]);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        expm1(x) {
-            assertNotComplex(x, 'expm1');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                newValues[i] = Math.expm1(values[i]);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        log(x) {
-            assertNotComplex(x, 'log');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                const value = values[i];
-                newValues[i] = Math.log(value);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        log1p(x) {
-            assertNotComplex(x, 'log1p');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                const value = values[i];
-                newValues[i] = Math.log1p(value);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        sqrt(x) {
-            assertNotComplex(x, 'sqrt');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                const value = values[i];
-                newValues[i] = Math.sqrt(value);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        rsqrt(x) {
-            assertNotComplex(x, 'rsqrt');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                const value = values[i];
-                newValues[i] = 1 / Math.sqrt(value);
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
-        reciprocal(x) {
-            assertNotComplex(x, 'reciprocal');
-            const values = this.readSync(x.dataId);
-            const newValues = new Float32Array(values.length);
-            for (let i = 0; i < values.length; ++i) {
-                newValues[i] = 1 / values[i];
-            }
-            return this.makeOutput(newValues, x.shape, 'float32');
-        }
         linear(x) {
             return x;
         }
@@ -51518,21 +51149,6 @@
             assertNotComplex([x, a], 'prelu');
             return this.broadcastedBinaryOp(x, a, x.dtype, (xValue, aValue) => xValue < 0 ? aValue * xValue : xValue);
         }
-        elu(x) {
-            assertNotComplex(x, 'elu');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                const v = values[i];
-                if (v >= 0) {
-                    resultValues[i] = v;
-                }
-                else {
-                    resultValues[i] = (Math.exp(v) - 1);
-                }
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
         eluDer(dy, y) {
             assertNotComplex([dy, y], 'eluDer');
             const resultValues = new Float32Array(y.size);
@@ -51549,246 +51165,15 @@
             }
             return this.makeOutput(resultValues, y.shape, 'float32');
         }
-        selu(x) {
-            assertNotComplex(x, 'selu');
-            // Stable and Attracting Fixed Point (0, 1) for Normalized Weights.
-            // see: https://arxiv.org/abs/1706.02515
-            const scaleAlpha = SELU_SCALEALPHA;
-            const scale = SELU_SCALE;
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                const v = values[i];
-                if (v >= 0) {
-                    resultValues[i] = scale * v;
-                }
-                else {
-                    resultValues[i] = scaleAlpha * (Math.exp(v) - 1);
-                }
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        clip(x, min, max) {
-            assertNotComplex(x, 'clip');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                const v = values[i];
-                resultValues[i] = v > max ? max : (v < min ? min : v);
-            }
-            return this.makeOutput(resultValues, x.shape, x.dtype);
-        }
-        abs(x) {
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.abs(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        complexAbs(x) {
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < x.size; ++i) {
-                const real = values[i * 2];
-                const imag = values[i * 2 + 1];
-                resultValues[i] = Math.hypot(real, imag);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        int(x) {
-            assertNotComplex(x, 'int');
-            const resultValues = new Int32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = values[i];
-            }
-            return this.makeOutput(resultValues, x.shape, 'int32');
-        }
-        sigmoid(x) {
-            assertNotComplex(x, 'sigmoid');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = 1 / (1 + Math.exp(-values[i]));
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        softplus(x) {
-            assertNotComplex(x, 'softplus');
-            // mirrors the implementation of tf.nn.softplus: https://goo.gl/vkcvwX
-            // epsilon is the difference between 1.0 and the next representable float.
-            // For a single precision 32 bit float this should be 2^-23, see:
-            // https://math.byu.edu/~schow/work/IEEEFloatingPoint.htm
-            const epsilon = 1.1920928955078125e-7;
-            const threshold = Math.log(epsilon) + 2.0;
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                // Value above which exp(x) may overflow, but softplus(x) == x
-                // is within machine epsilon.
-                const tooLarge = values[i] > -threshold;
-                // Value below which exp(x) may underflow, but softplus(x) == exp(x)
-                // is within machine epsilon.
-                const tooSmall = values[i] < threshold;
-                const expX = Math.exp(values[i]);
-                let result;
-                if (tooSmall) {
-                    result = expX;
-                }
-                else if (tooLarge) {
-                    result = values[i];
-                }
-                else {
-                    result = Math.log(1.0 + expX);
-                }
-                resultValues[i] = result;
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        sin(x) {
-            assertNotComplex(x, 'sin');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.sin(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        tan(x) {
-            assertNotComplex(x, 'tan');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.tan(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        asin(x) {
-            assertNotComplex(x, 'asin');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.asin(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        acos(x) {
-            assertNotComplex(x, 'acos');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.acos(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        atan(x) {
-            assertNotComplex(x, 'atan');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.atan(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
         atan2(a, b) {
             assertNotComplex([a, b], 'atan2');
             return this.broadcastedBinaryOp(a, b, a.dtype, (aValue, bValue) => Math.atan2(aValue, bValue));
         }
-        sinh(x) {
-            assertNotComplex(x, 'sinh');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.sinh(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        cosh(x) {
-            assertNotComplex(x, 'cosh');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.cosh(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        tanh(x) {
-            assertNotComplex(x, 'tanh');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = tanh(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        asinh(x) {
-            assertNotComplex(x, 'asinh');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.asinh(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        acosh(x) {
-            assertNotComplex(x, 'acosh');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.acosh(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        atanh(x) {
-            assertNotComplex(x, 'atanh');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                resultValues[i] = Math.atanh(values[i]);
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        erf(x) {
-            assertNotComplex(x, 'erf');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            const p = ERF_P;
-            const a1 = ERF_A1;
-            const a2 = ERF_A2;
-            const a3 = ERF_A3;
-            const a4 = ERF_A4;
-            const a5 = ERF_A5;
-            for (let i = 0; i < values.length; ++i) {
-                const sign = Math.sign(values[i]);
-                const v = Math.abs(values[i]);
-                const t = 1.0 / (1.0 + p * v);
-                resultValues[i] = sign *
-                    (1.0 -
-                        (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t *
-                            Math.exp(-v * v));
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
-        step(x, alpha = 0) {
-            assertNotComplex(x, 'step');
-            const resultValues = new Float32Array(x.size);
-            const values = this.readSync(x.dataId);
-            for (let i = 0; i < values.length; ++i) {
-                const value = values[i];
-                if (isNaN(value)) {
-                    resultValues[i] = NaN;
-                }
-                else {
-                    resultValues[i] = value > 0 ? 1 : alpha;
-                }
-            }
-            return this.makeOutput(resultValues, x.shape, 'float32');
-        }
         fusedConv2d({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
             let result = this.conv2d(input, filter, convInfo);
             if (bias) {
-                result = this.add(result, bias);
+                // TODO(lina128): Use add directly once fusedConv2d is modularized.
+                result = add$1(result, bias);
             }
             if (activation) {
                 result =
@@ -52140,7 +51525,9 @@
         fusedDepthwiseConv2D({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
             let result = this.depthwiseConv2D(input, filter, convInfo);
             if (bias) {
-                result = this.add(result, bias);
+                // TODO(lina128): Use add directly once fusedDepthwiseConv2D is
+                // modularized.
+                result = add$1(result, bias);
             }
             if (activation) {
                 result =
@@ -52315,110 +51702,6 @@
             return transpose(x.reshape(reshaped), permuted)
                 .reshape(reshapedPermuted)
                 .slice(sliceBeginCoords, sliceSize);
-        }
-        maxPool(x, convInfo) {
-            assertNotComplex(x, 'maxPool');
-            const xValues = this.readSync(x.dataId);
-            return pool$1(xValues, x.shape, x.dtype, x.strides, convInfo, 'max')
-                .toTensor();
-        }
-        maxPoolBackprop(dy, x, y, convInfo) {
-            assertNotComplex([x, y], 'maxPoolBackprop');
-            const xValues = this.readSync(x.dataId);
-            const maxPosBuf = buffer(convInfo.outShape, x.dtype, maxPoolPositions(xValues, x.shape, x.dtype, convInfo).values);
-            const strideHeight = convInfo.strideHeight;
-            const strideWidth = convInfo.strideWidth;
-            const dilationHeight = convInfo.dilationHeight;
-            const dilationWidth = convInfo.dilationWidth;
-            const effectiveFilterHeight = convInfo.effectiveFilterHeight;
-            const effectiveFilterWidth = convInfo.effectiveFilterWidth;
-            const padLeft = effectiveFilterWidth - 1 - convInfo.padInfo.left;
-            const padTop = effectiveFilterHeight - 1 - convInfo.padInfo.top;
-            const dx = buffer(x.shape, 'float32');
-            const dyBuf = this.bufferSync(dy);
-            for (let b = 0; b < convInfo.batchSize; ++b) {
-                for (let d = 0; d < convInfo.inChannels; ++d) {
-                    for (let dxR = 0; dxR < convInfo.inHeight; ++dxR) {
-                        for (let dxC = 0; dxC < convInfo.inWidth; ++dxC) {
-                            // Shader code begins.
-                            const dyRCorner = dxR - padTop;
-                            const dyCCorner = dxC - padLeft;
-                            let dotProd = 0;
-                            for (let wR = 0; wR < effectiveFilterHeight; wR += dilationHeight) {
-                                const dyR = (dyRCorner + wR) / strideHeight;
-                                if (dyR < 0 || dyR >= convInfo.outHeight ||
-                                    Math.floor(dyR) !== dyR) {
-                                    continue;
-                                }
-                                for (let wC = 0; wC < effectiveFilterWidth; wC += dilationWidth) {
-                                    const dyC = (dyCCorner + wC) / strideWidth;
-                                    if (dyC < 0 || dyC >= convInfo.outWidth ||
-                                        Math.floor(dyC) !== dyC) {
-                                        continue;
-                                    }
-                                    const maxPos = effectiveFilterHeight * effectiveFilterWidth -
-                                        1 - maxPosBuf.get(b, dyR, dyC, d);
-                                    const curPos = wR * effectiveFilterWidth + wC;
-                                    const mask = maxPos === curPos ? 1 : 0;
-                                    if (mask === 0) {
-                                        continue;
-                                    }
-                                    const pixel = dyBuf.get(b, dyR, dyC, d);
-                                    dotProd += pixel * mask;
-                                }
-                            }
-                            dx.set(dotProd, b, dxR, dxC, d);
-                        }
-                    }
-                }
-            }
-            return dx.toTensor();
-        }
-        avgPoolBackprop(dy, x, convInfo) {
-            assertNotComplex([dy, x], 'avgPoolBackprop');
-            const strideHeight = convInfo.strideHeight;
-            const strideWidth = convInfo.strideWidth;
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const dilationHeight = convInfo.dilationHeight;
-            const dilationWidth = convInfo.dilationWidth;
-            const effectiveFilterHeight = convInfo.effectiveFilterHeight;
-            const effectiveFilterWidth = convInfo.effectiveFilterWidth;
-            const padLeft = effectiveFilterWidth - 1 - convInfo.padInfo.left;
-            const padTop = effectiveFilterHeight - 1 - convInfo.padInfo.top;
-            const dx = buffer(x.shape, 'float32');
-            const avgMultiplier = 1 / (filterHeight * filterWidth);
-            const dyBuf = this.bufferSync(dy);
-            for (let b = 0; b < convInfo.batchSize; ++b) {
-                for (let d = 0; d < convInfo.inChannels; ++d) {
-                    for (let dxR = 0; dxR < convInfo.inHeight; ++dxR) {
-                        for (let dxC = 0; dxC < convInfo.inWidth; ++dxC) {
-                            // Shader code begins.
-                            const dyRCorner = dxR - padTop;
-                            const dyCCorner = dxC - padLeft;
-                            let dotProd = 0;
-                            for (let wR = 0; wR < effectiveFilterHeight; wR += dilationHeight) {
-                                const dyR = (dyRCorner + wR) / strideHeight;
-                                if (dyR < 0 || dyR >= convInfo.outHeight ||
-                                    Math.floor(dyR) !== dyR) {
-                                    continue;
-                                }
-                                for (let wC = 0; wC < effectiveFilterWidth; wC += dilationWidth) {
-                                    const dyC = (dyCCorner + wC) / strideWidth;
-                                    if (dyC < 0 || dyC >= convInfo.outWidth ||
-                                        Math.floor(dyC) !== dyC) {
-                                        continue;
-                                    }
-                                    const pixel = dyBuf.get(b, dyR, dyC, d);
-                                    dotProd += pixel;
-                                }
-                            }
-                            dx.set(dotProd * avgMultiplier, b, dxR, dxC, d);
-                        }
-                    }
-                }
-            }
-            return dx.toTensor();
         }
         pool3d(x, convInfo, poolType) {
             assertNotComplex(x, 'pool3d');
@@ -52715,17 +51998,6 @@
             }
             return dx.toTensor();
         }
-        cast(x, dtype) {
-            return castTensor(x, dtype, this);
-        }
-        avgPool(x, convInfo) {
-            assertNotComplex(x, 'avgPool');
-            assertNotComplex(x, 'maxPool');
-            const xValues = this.readSync(x.dataId);
-            return pool$1(xValues, x.shape, x.dtype, x.strides, convInfo, 'avg')
-                .toTensor()
-                .toFloat();
-        }
         resizeBilinear(x, newHeight, newWidth, alignCorners) {
             assertNotComplex(x, 'resizeBilinear');
             const [batch, oldHeight, oldWidth, numChannels] = x.shape;
@@ -52952,43 +52224,6 @@
             }
             return tensor4d(output, x.shape, x.dtype);
         }
-        batchNorm(x, mean, variance, offset, scale, varianceEpsilon) {
-            assertNotComplex([x, mean, variance, scale, offset], 'batchNorm');
-            const xVals = this.readSync(x.dataId);
-            const mVals = this.readSync(mean.dataId);
-            const varVals = this.readSync(variance.dataId);
-            const sVals = scale ? this.readSync(scale.dataId) :
-                new Float32Array([1]);
-            const offVals = offset ? this.readSync(offset.dataId) :
-                new Float32Array([0]);
-            const outVals = new Float32Array(xVals.length);
-            const offValsLength = offVals.length;
-            const sValsLength = sVals.length;
-            const varValsLength = varVals.length;
-            const mValsLength = mVals.length;
-            let offi = 0;
-            let mi = 0;
-            let si = 0;
-            let vi = 0;
-            for (let i = 0; i < xVals.length; ++i) {
-                outVals[i] = offVals[offi++] +
-                    (xVals[i] - mVals[mi++]) * sVals[si++] /
-                        Math.sqrt(varVals[vi++] + varianceEpsilon);
-                if (offi >= offValsLength) {
-                    offi = 0;
-                }
-                if (mi >= mValsLength) {
-                    mi = 0;
-                }
-                if (si >= sValsLength) {
-                    si = 0;
-                }
-                if (vi >= varValsLength) {
-                    vi = 0;
-                }
-            }
-            return tensor4d(outVals, x.shape);
-        }
         localResponseNormalization4D(x, depthRadius, bias, alpha, beta) {
             assertNotComplex(x, 'localResponseNormalization4D');
             const channels = x.shape[3];
@@ -53096,102 +52331,6 @@
             const scoresVals = this.readSync(scores.dataId);
             return nonMaxSuppressionV3Impl$1(boxesVals, scoresVals, maxOutputSize, iouThreshold, scoreThreshold);
         }
-        fft(x) {
-            return this.fftBatch(x, false);
-        }
-        ifft(x) {
-            return this.fftBatch(x, true);
-        }
-        /**
-         * Calculate FFT of inner most elements of batch tensor.
-         */
-        fftBatch(x, inverse) {
-            const batch = x.shape[0];
-            const innerDim = x.shape[1];
-            // Collects real and imaginary values separately.
-            const realResult = buffer(x.shape, 'float32');
-            const imagResult = buffer(x.shape, 'float32');
-            const real$1 = real(x).as2D(batch, innerDim);
-            const imag$1 = imag(x).as2D(batch, innerDim);
-            for (let b = 0; b < batch; b++) {
-                // TODO: Support slice ops for complex type.
-                const r = real$1.slice([b, 0], [1, innerDim]);
-                const i = imag$1.slice([b, 0], [1, innerDim]);
-                const input = complex(r, i);
-                // Run FFT by batch element.
-                const res = this.readSync(this.fftImpl(input, inverse).dataId);
-                for (let d = 0; d < innerDim; d++) {
-                    const c = getComplexWithIndex(res, d);
-                    realResult.values[b * innerDim + d] = c.real;
-                    imagResult.values[b * innerDim + d] = c.imag;
-                }
-            }
-            const t = complex(realResult.toTensor(), imagResult.toTensor());
-            return t.as2D(batch, innerDim);
-        }
-        fftImpl(x, inverse) {
-            const x1D = x.as1D();
-            const n = x1D.size;
-            if (this.isExponentOf2(n)) {
-                let result = this.fftRadix2(x1D, n, inverse).as2D(x.shape[0], x.shape[1]);
-                if (inverse) {
-                    result = complex(real(result).div(scalar(n)), imag(result).div(scalar(n)));
-                }
-                return result;
-            }
-            else {
-                const data = this.readSync(x.dataId);
-                const rawOutput = this.fourierTransformByMatmul(data, n, inverse);
-                const output = splitRealAndImagArrays(rawOutput);
-                return complex(output.real, output.imag).as2D(x.shape[0], x.shape[1]);
-            }
-        }
-        isExponentOf2(size) {
-            return (size & size - 1) === 0;
-        }
-        // FFT using Cooley-Tukey algorithm on radix 2 dimensional input.
-        fftRadix2(input, size, inverse) {
-            if (size === 1) {
-                return input;
-            }
-            const data = this.readSync(input.dataId);
-            const half = size / 2;
-            const evenComplex = complexWithEvenIndex(data);
-            let evenTensor = complex(evenComplex.real, evenComplex.imag).as1D();
-            const oddComplex = complexWithOddIndex(data);
-            let oddTensor = complex(oddComplex.real, oddComplex.imag).as1D();
-            // Recursive call for half part of original input.
-            evenTensor = this.fftRadix2(evenTensor, half, inverse);
-            oddTensor = this.fftRadix2(oddTensor, half, inverse);
-            const e = exponents(size, inverse);
-            const exponent = complex(e.real, e.imag).mul(oddTensor);
-            const addPart = evenTensor.add(exponent);
-            const subPart = evenTensor.sub(exponent);
-            const realTensor = real(addPart).concat(real(subPart));
-            const imagTensor = imag(addPart).concat(imag(subPart));
-            return complex(realTensor, imagTensor).as1D();
-        }
-        // Calculate fourier transform by multplying sinusoid matrix.
-        fourierTransformByMatmul(data, size, inverse) {
-            const ret = new Float32Array(size * 2);
-            // TODO: Use matmul instead once it supports complex64 type.
-            for (let r = 0; r < size; r++) {
-                let real = 0.0;
-                let imag = 0.0;
-                for (let c = 0; c < size; c++) {
-                    const e = exponent(r * c, size, inverse);
-                    const term = getComplexWithIndex(data, c);
-                    real += term.real * e.real - term.imag * e.imag;
-                    imag += term.real * e.imag + term.imag * e.real;
-                }
-                if (inverse) {
-                    real /= size;
-                    imag /= size;
-                }
-                assignToTypedArray(ret, real, imag, r);
-            }
-            return ret;
-        }
         depthToSpace(x, blockSize, dataFormat) {
             assert(dataFormat === 'NHWC', () => `Only NHWC dataFormat supported on CPU for depthToSpace. Got ${dataFormat}`);
             assert(blockSize > 1, () => `blockSize should be > 1 for depthToSpace, but was: ${blockSize}`);
@@ -53251,43 +52390,6 @@
                 }
             }
             return result.toTensor();
-        }
-        broadcastedBinaryComplexOp(a, b, op) {
-            const newShape = assertAndGetBroadcastShape(a.shape, b.shape);
-            const realResult = buffer(newShape, 'float32');
-            const imagResult = buffer(newShape, 'float32');
-            const aVals = this.readSync(a.dataId);
-            const bVals = this.readSync(b.dataId);
-            const aBroadcastDims = getBroadcastDims(a.shape, newShape);
-            const bBroadcastDims = getBroadcastDims(b.shape, newShape);
-            const realVals = realResult.values;
-            const imagVals = imagResult.values;
-            if (aBroadcastDims.length + bBroadcastDims.length === 0) {
-                for (let i = 0; i < realVals.length; i++) {
-                    const aIdx = i % aVals.length;
-                    const bIdx = i % bVals.length;
-                    const result = op(aVals[aIdx * 2], aVals[aIdx * 2 + 1], bVals[bIdx * 2], bVals[bIdx * 2 + 1]);
-                    realVals[i] = result.real;
-                    imagVals[i] = result.imag;
-                }
-            }
-            else {
-                const aRealBuf = this.bufferSync(this.data.get(a.dataId).complexTensors.real);
-                const bRealBuf = this.bufferSync(this.data.get(b.dataId).complexTensors.real);
-                for (let i = 0; i < realVals.length; i++) {
-                    const loc = realResult.indexToLoc(i);
-                    const aLoc = loc.slice(-a.rank);
-                    aBroadcastDims.forEach(d => aLoc[d] = 0);
-                    const aIndex = aRealBuf.locToIndex(aLoc);
-                    const bLoc = loc.slice(-b.rank);
-                    bBroadcastDims.forEach(d => bLoc[d] = 0);
-                    const bIndex = bRealBuf.locToIndex(bLoc);
-                    const opResult = op(aVals[aIndex * 2], aVals[aIndex * 2 + 1], bVals[bIndex * 2], bVals[bIndex * 2 + 1]);
-                    realVals[i] = opResult.real;
-                    imagVals[i] = opResult.imag;
-                }
-            }
-            return this.complex(realResult.toTensor(), imagResult.toTensor());
         }
         split(x, sizeSplits, axis) {
             return split$3(x, sizeSplits, axis);
@@ -53502,6 +52604,640 @@
     /**
      * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function simpleAbsImpl(vals) {
+        const resultValues = new Float32Array(vals.length);
+        for (let i = 0; i < vals.length; ++i) {
+            resultValues[i] = Math.abs(vals[i]);
+        }
+        return resultValues;
+    }
+    const absKernelFunc = (args) => {
+        const { x } = args.inputs;
+        const cpuBackend = args.backend;
+        let resultValues = new Float32Array(sizeFromShape(x.shape));
+        if (x.dtype !== 'complex64') {
+            const values = cpuBackend.data.get(x.dataId).values;
+            resultValues = simpleAbsImpl(values);
+        }
+        else {
+            const complexVals = cpuBackend.data.get(x.dataId);
+            const real = complexVals.complexTensorInfos.real;
+            const imag = complexVals.complexTensorInfos.imag;
+            const realVals = cpuBackend.data.get(real.dataId).values;
+            const imagVals = cpuBackend.data.get(imag.dataId).values;
+            for (let i = 0; i < realVals.length; i++) {
+                const real = realVals[i];
+                const imag = imagVals[i];
+                resultValues[i] = Math.hypot(real, imag);
+            }
+        }
+        return cpuBackend.makeOutput(resultValues, x.shape, 'float32');
+    };
+    const absConfig = {
+        kernelName: Abs,
+        backendName: 'cpu',
+        kernelFunc: absKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Template that creates implementation for binary ops. Supports broadcast.
+     */
+    function createSimpleBinaryKernelImpl(op) {
+        return (aShape, bShape, aVals, bVals, dtype) => {
+            const newShape = assertAndGetBroadcastShape(aShape, bShape);
+            const resultRank = newShape.length;
+            const resultStrides = computeStrides(newShape);
+            const resultSize = sizeFromShape(newShape);
+            const result = getTypedArrayFromDType(dtype, resultSize);
+            const aRank = aShape.length;
+            const bRank = bShape.length;
+            const aStrides = computeStrides(aShape);
+            const bStrides = computeStrides(bShape);
+            const aBroadcastDims = getBroadcastDims(aShape, newShape);
+            const bBroadcastDims = getBroadcastDims(bShape, newShape);
+            if (aBroadcastDims.length + bBroadcastDims.length === 0) {
+                for (let i = 0; i < result.length; ++i) {
+                    result[i] = op(aVals[i % aVals.length], bVals[i % bVals.length]);
+                }
+            }
+            else {
+                for (let i = 0; i < result.length; ++i) {
+                    const loc = indexToLoc(i, resultRank, resultStrides);
+                    const aLoc = loc.slice(-aRank);
+                    aBroadcastDims.forEach(d => aLoc[d] = 0);
+                    const aIndex = locToIndex(aLoc, aRank, aStrides);
+                    const bLoc = loc.slice(-bRank);
+                    bBroadcastDims.forEach(d => bLoc[d] = 0);
+                    const bIndex = locToIndex(bLoc, bRank, bStrides);
+                    result[i] = op(aVals[aIndex], bVals[bIndex]);
+                }
+            }
+            return [result, newShape];
+        };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function complex$1(args) {
+        const { inputs, backend } = args;
+        const { real, imag } = inputs;
+        const realVals = backend.data.get(real.dataId).values;
+        const imagVals = backend.data.get(imag.dataId).values;
+        const complexInfo = backend.makeTensorInfo(real.shape, 'complex64');
+        const complex = backend.data.get(complexInfo.dataId);
+        // The complex tensor owns the underlying real and imag tensorInfos, only the
+        // complex tensor tracks refCount, when complexData is disposed the
+        // underlying tensorData will be disposed.
+        complex.complexTensorInfos = {
+            real: backend.makeTensorInfo(real.shape, 'float32', realVals),
+            imag: backend.makeTensorInfo(imag.shape, 'float32', imagVals)
+        };
+        return complexInfo;
+    }
+    const complexConfig = {
+        kernelName: Complex,
+        backendName: 'cpu',
+        kernelFunc: complex$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function identity(args) {
+        const { inputs, backend } = args;
+        const { x } = inputs;
+        backend.incRef(x.dataId);
+        return { dataId: x.dataId, shape: x.shape, dtype: x.dtype };
+    }
+    const identityConfig = {
+        kernelName: Identity,
+        backendName: 'cpu',
+        kernelFunc: identity
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function real$1(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        const real = backend.data.get(input.dataId).complexTensorInfos.real;
+        const realVal = backend.data.get(real.dataId).values;
+        // When complex tensor is disposed, its underlying parts will be disposed too.
+        // Make new tensor out of the real value of the complex. This makes sure the
+        // value is still accessible even if complex tensor is disposed.
+        return backend.makeTensorInfo(real.shape, real.dtype, realVal);
+    }
+    const realConfig = {
+        kernelName: Real,
+        backendName: 'cpu',
+        kernelFunc: real$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function cast$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { dtype } = attrs;
+        // Casting to complex64.
+        if (dtype === 'complex64') {
+            if (x.dtype === 'complex64') {
+                return identity({ inputs: { x }, backend });
+            }
+            // TODO(lina128): Import kernel function once zeros is modularized.
+            const zerosTensor = zeros(x.shape);
+            const floatX = cast$2({ inputs: { x }, backend, attrs: { dtype: 'float32' } });
+            const result = complex$1({ inputs: { real: floatX, imag: zerosTensor }, backend });
+            zerosTensor.dispose();
+            backend.disposeIntermediateTensorInfo(floatX);
+            return result;
+        }
+        // Casting from complex64
+        if (x.dtype === 'complex64') {
+            const realPart = real$1({ inputs: { input: x }, backend });
+            const result = cast$2({ inputs: { x: realPart }, backend, attrs: { dtype } });
+            backend.disposeIntermediateTensorInfo(realPart);
+            return result;
+        }
+        if (!hasEncodingLoss(x.dtype, dtype)) {
+            // We don't change the underlying data, since we cast to higher
+            // precision.
+            const result = identity({ inputs: { x }, backend });
+            return { dataId: result.dataId, shape: result.shape, dtype };
+        }
+        if (dtype === 'int32') {
+            const values = backend.data.get(x.dataId).values;
+            const resultValues = Int32Array.from(values);
+            return backend.makeTensorInfo(x.shape, 'int32', resultValues);
+        }
+        if (dtype === 'bool') {
+            // This is essentially the result of notEqual(x, 0). We avoid using
+            // kernel notEqual to avoid circular dependency, i.e. binary_utils ->
+            // cast -> notEqual -> binary_utils.
+            const xVals = backend.data.get(x.dataId).values;
+            const zero = toTypedArray([0], x.dtype);
+            const [resultData, resultShape] = createSimpleBinaryKernelImpl((a, b) => (a !== b) ? 1 : 0)(x.shape, [], xVals, zero, 'bool');
+            return backend.makeTensorInfo(resultShape, 'bool', resultData);
+        }
+        throw new Error(`Error in Cast: failed to cast ${x.dtype} to ${dtype}`);
+    }
+    const castConfig = {
+        kernelName: Cast,
+        backendName: 'cpu',
+        kernelFunc: cast$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Template that creates a `KernelFunc` for binary ops.
+     * @param name Kernel name.
+     * @param binaryKernelImpl A `SimpleBinaryKernelImpl` for the kernel.
+     * @param binaryKernelComplexImpl Optional. If exists, represents a
+     *     `ComplexBinaryKernelImpl` for the kernel, will be used when input dtype
+     *     is `complex64`.
+     * @param dtype Optional. If set, the result has this dtype. Otherwise, the
+     *     result has the same dtype as the first input. This is mainly used in
+     *     comparison kernels, such as Equal, Less, Greater, etc.
+     */
+    function binaryKernelFunc(name, simpleImpl, complexImpl, dtype) {
+        if (complexImpl == null) {
+            return ({ inputs, backend }) => {
+                const { a, b } = inputs;
+                const cpuBackend = backend;
+                assertNotComplex([a, b], name);
+                const aVals = cpuBackend.data.get(a.dataId).values;
+                const bVals = cpuBackend.data.get(b.dataId).values;
+                const $dtype = dtype || a.dtype;
+                const [resultData, resultShape] = simpleImpl(a.shape, b.shape, aVals, bVals, $dtype);
+                return cpuBackend.makeTensorInfo(resultShape, $dtype, resultData);
+            };
+        }
+        return ({ inputs, backend }) => {
+            const { a, b } = inputs;
+            const cpuBackend = backend;
+            if (a.dtype === 'complex64' || b.dtype === 'complex64') {
+                const $aComplex = cast$2({ inputs: { x: a }, backend: cpuBackend, attrs: { dtype: 'complex64' } });
+                const $aComplexVals = cpuBackend.data.get($aComplex.dataId);
+                const aReal = $aComplexVals.complexTensorInfos.real;
+                const aImag = $aComplexVals.complexTensorInfos.imag;
+                const aRealVals = cpuBackend.data.get(aReal.dataId).values;
+                const aImagVals = cpuBackend.data.get(aImag.dataId).values;
+                const $bComplex = cast$2({ inputs: { x: b }, backend: cpuBackend, attrs: { dtype: 'complex64' } });
+                const $bComplexVals = cpuBackend.data.get($bComplex.dataId);
+                const bReal = $bComplexVals.complexTensorInfos.real;
+                const bImag = $bComplexVals.complexTensorInfos.imag;
+                const bRealVals = cpuBackend.data.get(bReal.dataId).values;
+                const bImagVals = cpuBackend.data.get(bImag.dataId).values;
+                const [resultRealData, resultImagData, resultShape] = complexImpl(a.shape, b.shape, aRealVals, aImagVals, bRealVals, bImagVals);
+                const resultReal = cpuBackend.makeTensorInfo(resultShape, 'float32', resultRealData);
+                const resultImag = cpuBackend.makeTensorInfo(resultShape, 'float32', resultImagData);
+                const result = complex$1({ inputs: { real: resultReal, imag: resultImag }, backend: cpuBackend });
+                cpuBackend.disposeIntermediateTensorInfo($aComplex);
+                cpuBackend.disposeIntermediateTensorInfo($bComplex);
+                cpuBackend.disposeIntermediateTensorInfo(resultReal);
+                cpuBackend.disposeIntermediateTensorInfo(resultImag);
+                return result;
+            }
+            else {
+                const aVals = cpuBackend.data.get(a.dataId).values;
+                const bVals = cpuBackend.data.get(b.dataId).values;
+                const $dtype = dtype || a.dtype;
+                const [resultData, resultShape] = simpleImpl(a.shape, b.shape, aVals, bVals, $dtype);
+                return cpuBackend.makeTensorInfo(resultShape, $dtype, resultData);
+            }
+        };
+    }
+    /**
+     * Template that creates the complex type implementation for binary ops.
+     * Supports broadcast.
+     */
+    function createComplexBinaryKernelImpl(op) {
+        return (aShape, bShape, aRealVals, aImagVals, bRealVals, bImagVals) => {
+            const resultShape = assertAndGetBroadcastShape(aShape, bShape);
+            const resultSize = sizeFromShape(resultShape);
+            const resultRank = resultShape.length;
+            const resultStrides = computeStrides(resultShape);
+            const resultRealVals = getTypedArrayFromDType('float32', resultSize);
+            const resultImagVals = getTypedArrayFromDType('float32', resultSize);
+            const aBroadcastDims = getBroadcastDims(aShape, resultShape);
+            const bBroadcastDims = getBroadcastDims(bShape, resultShape);
+            const aVals = mergeRealAndImagArrays(aRealVals, aImagVals);
+            const bVals = mergeRealAndImagArrays(bRealVals, bImagVals);
+            const aRank = aShape.length;
+            const aStrides = computeStrides(aShape);
+            const bRank = bShape.length;
+            const bStrides = computeStrides(bShape);
+            if (aBroadcastDims.length + bBroadcastDims.length === 0) {
+                for (let i = 0; i < resultRealVals.length; i++) {
+                    const aIdx = i % aVals.length;
+                    const bIdx = i % bVals.length;
+                    const result = op(aVals[aIdx * 2], aVals[aIdx * 2 + 1], bVals[bIdx * 2], bVals[bIdx * 2 + 1]);
+                    resultRealVals[i] = result.real;
+                    resultImagVals[i] = result.imag;
+                }
+            }
+            else {
+                for (let i = 0; i < resultRealVals.length; i++) {
+                    const loc = indexToLoc(i, resultRank, resultStrides);
+                    const aLoc = loc.slice(-aRank);
+                    aBroadcastDims.forEach(d => aLoc[d] = 0);
+                    const aIndex = locToIndex(aLoc, aRank, aStrides);
+                    const bLoc = loc.slice(-bRank);
+                    bBroadcastDims.forEach(d => bLoc[d] = 0);
+                    const bIndex = locToIndex(bLoc, bRank, bStrides);
+                    const opResult = op(aVals[aIndex * 2], aVals[aIndex * 2 + 1], bVals[bIndex * 2], bVals[bIndex * 2 + 1]);
+                    resultRealVals[i] = opResult.real;
+                    resultImagVals[i] = opResult.imag;
+                }
+            }
+            return [resultRealVals, resultImagVals, resultShape];
+        };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const addImpl = createSimpleBinaryKernelImpl(((a, b) => a + b));
+    const addComplexImpl = createComplexBinaryKernelImpl(((aReal, aImag, bReal, bImag) => {
+        return { real: aReal + bReal, imag: aImag + bImag };
+    }));
+    const add$2 = binaryKernelFunc(Add, addImpl, addComplexImpl);
+    const addConfig = {
+        kernelName: Add,
+        backendName: 'cpu',
+        kernelFunc: add$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Template that creates implementation for unary op.
+     */
+    function createSimpleUnaryImpl(op) {
+        return (values, dtype, attrs) => {
+            const newValues = getTypedArrayFromDType(dtype, values.length);
+            for (let i = 0; i < values.length; ++i) {
+                newValues[i] = op(values[i], attrs);
+            }
+            return newValues;
+        };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Template that creates a `KernelFunc` for unary ops.
+     * @param name Kernel name.
+     * @param op A `SimpleUnaryOperation` for the kernel.
+     * @param dtype Optional. If set, the result has this dtype. Otherwise, the
+     *     result has the same dtype as the input. This is mainly used in certain
+     *     kernels that return bool type, such as isFinite, isInf, etc.
+     */
+    function unaryKernelFunc(name, op, dtype) {
+        return ({ inputs, attrs, backend }) => {
+            const { x } = inputs;
+            assertNotComplex(x, name);
+            if (x.dtype === 'string' || dtype === 'string') {
+                throw new Error('unaryKernelFunc does not support string input/output');
+            }
+            const cpuBackend = backend;
+            const values = cpuBackend.data.get(x.dataId).values;
+            const xSize = sizeFromShape(x.shape);
+            const $dtype = dtype || x.dtype;
+            const newValues = getArrayFromDType($dtype, xSize);
+            for (let i = 0; i < xSize; ++i) {
+                newValues[i] = op(values[i], attrs);
+            }
+            return cpuBackend.makeTensorInfo(x.shape, $dtype, newValues);
+        };
+    }
+    /**
+     * Template that creates a `KernelFunc` for unary ops from the given
+     * `SimpleUnaryImpl`..
+     * @param name Kernel name.
+     * @param unaryImpl A `SimpleUnaryImpl` that implements the op.
+     * @param dtype Optional. If set, the result has this dtype. Otherwise, the
+     *     result has the same dtype as the input. This is mainly used in certain
+     *     kernels that return bool type, such as isFinite, isInf, etc.
+     */
+    function unaryKernelFuncFromImpl(name, unaryImpl, dtype) {
+        return ({ inputs, attrs, backend }) => {
+            const { x } = inputs;
+            assertNotComplex(x, name);
+            if (x.dtype === 'string' || dtype === 'string') {
+                throw new Error('unaryKernelFunc does not support string input/output');
+            }
+            const cpuBackend = backend;
+            const values = cpuBackend.data.get(x.dataId).values;
+            const $dtype = dtype || x.dtype;
+            const newValues = unaryImpl(values, $dtype, attrs);
+            return cpuBackend.makeTensorInfo(x.shape, $dtype, newValues);
+        };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const ceilImpl = createSimpleUnaryImpl((xi) => Math.ceil(xi));
+    const ceilKernelFunc = unaryKernelFuncFromImpl(Ceil, ceilImpl);
+    const ceilConfig = {
+        kernelName: Ceil,
+        backendName: 'cpu',
+        kernelFunc: ceilKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const expImpl = createSimpleUnaryImpl((xi) => Math.exp(xi));
+    const expKernelFunc = unaryKernelFuncFromImpl(Exp, expImpl);
+    const expConfig = {
+        kernelName: Exp,
+        backendName: 'cpu',
+        kernelFunc: expKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const expm1Impl = createSimpleUnaryImpl((xi) => Math.expm1(xi));
+    const expm1KernelFunc = unaryKernelFuncFromImpl(Expm1, expm1Impl);
+    const expm1Config = {
+        kernelName: Expm1,
+        backendName: 'cpu',
+        kernelFunc: expm1KernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const floorImpl = createSimpleUnaryImpl((xi) => Math.floor(xi));
+    const floorKernelFunc = unaryKernelFuncFromImpl(Floor, floorImpl);
+    const floorConfig = {
+        kernelName: Floor,
+        backendName: 'cpu',
+        kernelFunc: floorKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const logImpl = createSimpleUnaryImpl((xi) => Math.log(xi));
+    const logKernelFunc = unaryKernelFuncFromImpl(Log, logImpl);
+    const logConfig = {
+        kernelName: Log,
+        backendName: 'cpu',
+        kernelFunc: logKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -53530,6 +53266,139 @@
         }
         return vals;
     }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const multiplyImpl = createSimpleBinaryKernelImpl(((aValue, bValue) => aValue * bValue));
+    const multiplyComplexImpl = createComplexBinaryKernelImpl(((aReal, aImag, bReal, bImag) => {
+        return {
+            real: aReal * bReal - aImag * bImag,
+            imag: aReal * bImag + aImag * bReal
+        };
+    }));
+    const multiply = binaryKernelFunc(Multiply, multiplyImpl, multiplyComplexImpl);
+    const multiplyConfig = {
+        kernelName: Multiply,
+        backendName: 'cpu',
+        kernelFunc: multiply
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const rsqrtImpl = createSimpleUnaryImpl((xi) => 1 / Math.sqrt(xi));
+    const rsqrtKernelFunc = unaryKernelFuncFromImpl(Rsqrt, rsqrtImpl);
+    const rsqrtConfig = {
+        kernelName: Rsqrt,
+        backendName: 'cpu',
+        kernelFunc: rsqrtKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function sliceImpl(vals, begin, size, shape, dtype) {
+        const isContinous = isSliceContinous(shape, begin, size);
+        const length = sizeFromShape(size);
+        const xStrides = computeStrides(shape);
+        if (isContinous) {
+            const flatOffset = computeFlatOffset(begin, xStrides);
+            return vals.subarray(flatOffset, flatOffset + length);
+        }
+        const outVals = getTypedArrayFromDType(dtype, length);
+        for (let i = 0; i < length; ++i) {
+            const rank = size.length;
+            const strides = computeStrides(size);
+            const loc = indexToLoc(i, rank, strides);
+            const xLoc = loc.map((idx, j) => idx + begin[j]);
+            const xIndex = locToIndex(xLoc, shape.length, xStrides);
+            outVals[i] = vals[xIndex];
+        }
+        return outVals;
+    }
+    function slice$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { begin, size } = attrs;
+        assertNotComplex(x, 'slice');
+        const [$begin, $size] = parseSliceParams(x, begin, size);
+        assertParamsValid(x, $begin, $size);
+        const vals = backend.data.get(x.dataId).values;
+        const outVals = sliceImpl(vals, $begin, $size, x.shape, x.dtype);
+        return backend.makeTensorInfo($size, x.dtype, outVals);
+    }
+    const sliceConfig = {
+        kernelName: Slice,
+        backendName: 'cpu',
+        kernelFunc: slice$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const subImpl = createSimpleBinaryKernelImpl(((aValue, bValue) => aValue - bValue));
+    const subComplexImpl = createComplexBinaryKernelImpl(((aReal, aImag, bReal, bImag) => {
+        return { real: aReal - bReal, imag: aImag - bImag };
+    }));
+    const sub$1 = binaryKernelFunc(Sub, subImpl, subComplexImpl);
+    const subConfig = {
+        kernelName: Sub,
+        backendName: 'cpu',
+        kernelFunc: sub$1
+    };
 
     /**
      * @license
@@ -53582,11 +53451,168 @@
      * limitations under the License.
      * =============================================================================
      */
+    function uniqueImpl(values, axis, shape, dtype) {
+        // Normalize and validate axis.
+        const $axis = parseAxisParam(axis, shape)[0];
+        // Calculate the new shape that is suitable for extracting data along the
+        // given axis.
+        //
+        // The rank is 3.
+        // The size of the 1st dimension is the size of all the axes < the given axis.
+        // The size of the 2nd dimension is the same as the size of the given axis.
+        // The size of the 3rd dimension is the size of all the axes > the given axis.
+        //
+        // For example, for a 4D tensor with shape=[2, 3, 5, 4] and axis=2, the
+        // newShape would be: [2*3, 5, 4].
+        //
+        // Note that this is not the final output shape. This will be the shape for an
+        // intermediate TensorBuffer (see inputBuffer below) to allow us to extract
+        // values along the given axis. To demonstrate how it works, consider the
+        // following example:
+        //
+        // Input: a 3D tensor, with shape [1, 2, 3]
+        // [
+        //   [
+        //      [1,2,3],
+        //      [4,5,6]
+        //   ]
+        // ]
+        // Axis: 2 (the last axis).
+        // Along axis 2, we expect to extract 3 tensors: [1,4], [2,5], [3,6].
+        //
+        // For this example, newShape would be: [2, 3, 1], where 2 is calculated from
+        // 1*2. The re-shaped data would look like:
+        //
+        // [
+        //   [
+        //     [1], [2], [3]
+        //   ],
+        //   [
+        //     [4], [5], [6]
+        //   ]
+        // ]
+        //
+        // Then, we can construct a 3-level nested loop by the following dimension
+        // order to extract the values along the axis (dimension1):
+        // i: dimension1       // 0,1,2 (newShape[1])
+        //   m: dimension0     // 0,1   (newShape[0])
+        //     n: dimension2   // 0     (newShape[2])
+        //
+        //                       m, i, n
+        //                      ---------
+        // Iteration 0: data at [0, 0, 0] => "1"
+        // Iteration 1: data at [1, 0, 0] => "4"
+        // We got [1,4].
+        // Iteration 2: data at [0, 1, 0] => "2"
+        // Iteration 3: data at [1, 1, 0] => "5"
+        // We got [2,5].
+        // Iteration 4: data at [0, 2, 0] => "3"
+        // Iteration 5: data at [1, 2, 0] => "6"
+        // We got [3,6].
+        const newShape = [1, shape[0], 1];
+        for (let i = 0; i < $axis; i++) {
+            newShape[0] *= shape[i];
+        }
+        newShape[1] = shape[$axis];
+        for (let i = $axis + 1; i < shape.length; i++) {
+            newShape[2] *= shape[i];
+        }
+        // A map from unique elements (their string representations) to their values
+        // in "indices" (below).
+        const uniqueElements = {};
+        // The indices of each unique element in the original tensor along the given
+        // axis. It is 1D and has the same size as the given axis.
+        const indices = new Int32Array(shape[$axis]);
+        // Create a buffer so we can easily extract value at a given location.
+        const inputBuffer = new TensorBuffer(newShape, dtype, values);
+        // The indices along the given axis that have unique elements. This is a
+        // de-duped version of "indices" above.
+        const uniqueIndices = [];
+        const is1DTensor = newShape[0] === 1 && newShape[2] === 1;
+        for (let i = 0; i < shape[$axis]; i++) {
+            // Extract values along the axis.
+            let element;
+            if (is1DTensor) {
+                // Fast path for 1D tensor input.
+                element = values[i].toString();
+            }
+            else {
+                const axisValues = [];
+                for (let m = 0; m < newShape[0]; m++) {
+                    for (let n = 0; n < newShape[2]; n++) {
+                        axisValues.push(inputBuffer.get(m, i, n));
+                    }
+                }
+                element = axisValues.join(',');
+            }
+            // Dedup and update various indices.
+            if (uniqueElements[element] !== undefined) {
+                indices[i] = uniqueElements[element];
+            }
+            else {
+                const uniqueIndex = Object.keys(uniqueElements).length;
+                uniqueElements[element] = uniqueIndex;
+                indices[i] = uniqueIndex;
+                uniqueIndices.push(i);
+            }
+        }
+        // Now we know where each of the unique elements are located along the axis
+        // (uniqueIndices). Extract them from input buffer and store them in the
+        // output buffer.
+        const outputTmpShape = newShape.slice();
+        outputTmpShape[1] = Object.keys(uniqueElements).length;
+        const outputBuffer = new TensorBuffer(outputTmpShape, dtype);
+        uniqueIndices.forEach((uniqueElementIndex, i) => {
+            for (let m = 0; m < newShape[0]; m++) {
+                for (let n = 0; n < newShape[2]; n++) {
+                    outputBuffer.set(inputBuffer.get(m, uniqueElementIndex, n), m, i, n);
+                }
+            }
+        });
+        // The output shape can be calculated from the input shape with the size of
+        // the given axis replaced by the number of unique elements along that axis.
+        const outputShape = shape.slice();
+        outputShape[$axis] = outputTmpShape[1];
+        return {
+            outputValues: outputBuffer.values,
+            outputShape,
+            indices,
+        };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
 
     var shared = /*#__PURE__*/Object.freeze({
         __proto__: null,
+        simpleAbsImpl: simpleAbsImpl,
+        addImpl: addImpl,
+        ceilImpl: ceilImpl,
+        expImpl: expImpl,
+        expm1Impl: expm1Impl,
+        floorImpl: floorImpl,
+        logImpl: logImpl,
         maxImpl: maxImpl,
-        transposeImpl: transposeImpl
+        multiplyImpl: multiplyImpl,
+        rsqrtImpl: rsqrtImpl,
+        sliceImpl: sliceImpl,
+        subImpl: subImpl,
+        transposeImpl: transposeImpl,
+        uniqueImpl: uniqueImpl
     });
 
     /**
@@ -53611,6 +53637,144 @@
     /**
      * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const acosKernelFunc = unaryKernelFunc(Acos, (xi) => Math.acos(xi));
+    const acosConfig = {
+        kernelName: Acos,
+        backendName: 'cpu',
+        kernelFunc: acosKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const acoshKernelFunc = unaryKernelFunc(Acosh, (xi) => Math.acosh(xi));
+    const acoshConfig = {
+        kernelName: Acosh,
+        backendName: 'cpu',
+        kernelFunc: acoshKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const asinKernelFunc = unaryKernelFunc(Asin, (xi) => Math.asin(xi));
+    const asinConfig = {
+        kernelName: Asin,
+        backendName: 'cpu',
+        kernelFunc: asinKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const asinhKernelFunc = unaryKernelFunc(Asinh, (xi) => Math.asinh(xi));
+    const asinhConfig = {
+        kernelName: Asinh,
+        backendName: 'cpu',
+        kernelFunc: asinhKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const atanKernelFunc = unaryKernelFunc(Atan, (xi) => Math.atan(xi));
+    const atanConfig = {
+        kernelName: Atan,
+        backendName: 'cpu',
+        kernelFunc: atanKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const atanhKernelFunc = unaryKernelFunc(Atanh, (xi) => Math.atanh(xi));
+    const atanhConfig = {
+        kernelName: Atanh,
+        backendName: 'cpu',
+        kernelFunc: atanhKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -53624,22 +53788,553 @@
      * limitations under the License.
      * =============================================================================
      */
+    function pool$1(xValues, xShape, dtype, strides, convInfo, poolType) {
+        const strideHeight = convInfo.strideHeight;
+        const strideWidth = convInfo.strideWidth;
+        const dilationHeight = convInfo.dilationHeight;
+        const dilationWidth = convInfo.dilationWidth;
+        const effectiveFilterHeight = convInfo.effectiveFilterHeight;
+        const effectiveFilterWidth = convInfo.effectiveFilterWidth;
+        const padTop = convInfo.padInfo.top;
+        const padLeft = convInfo.padInfo.left;
+        const initialValue = (poolType === 'max' ? Number.NEGATIVE_INFINITY :
+            Number.POSITIVE_INFINITY);
+        const output = buffer(convInfo.outShape, dtype);
+        const outputVals = output.values;
+        const outputBatchStrides = convInfo.outShape[1] * convInfo.outShape[2] * convInfo.outShape[3];
+        const outputRowStrides = convInfo.outShape[2] * convInfo.outShape[3];
+        const outputColStrides = convInfo.outShape[3];
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            const outputBatchOffset = b * outputBatchStrides;
+            const inputBatchOffset = b * strides[0];
+            for (let d = 0; d < convInfo.inChannels; ++d) {
+                for (let yR = 0; yR < convInfo.outHeight; ++yR) {
+                    const xRCorner = yR * strideHeight - padTop;
+                    const xRMin = Math.max(0, xRCorner);
+                    const xRMax = Math.min(convInfo.inHeight, effectiveFilterHeight + xRCorner);
+                    const outputRowOffset = outputBatchOffset + yR * outputRowStrides;
+                    for (let yC = 0; yC < convInfo.outWidth; ++yC) {
+                        const xCCorner = yC * strideWidth - padLeft;
+                        const xCMin = Math.max(0, xCCorner);
+                        const xCMax = Math.min(convInfo.inWidth, effectiveFilterWidth + xCCorner);
+                        let minMaxValue = initialValue;
+                        let avgValue = 0;
+                        let count = 0;
+                        for (let xR = xRMin; xR < xRMax; xR += dilationHeight) {
+                            const xROffset = inputBatchOffset + xR * strides[1];
+                            for (let xC = xCMin; xC < xCMax; xC += dilationWidth) {
+                                const xCOffset = xROffset + xC * strides[2];
+                                const pixel = xValues[xCOffset + d];
+                                if ((poolType === 'max' && pixel > minMaxValue)) {
+                                    minMaxValue = pixel;
+                                }
+                                else if (poolType === 'avg') {
+                                    avgValue += pixel;
+                                    count++;
+                                }
+                            }
+                            if (isNaN(minMaxValue)) {
+                                break;
+                            }
+                        }
+                        const outputOffset = outputRowOffset + yC * outputColStrides + d;
+                        outputVals[outputOffset] =
+                            poolType === 'avg' ? avgValue / count : minMaxValue;
+                    }
+                }
+            }
+        }
+        return output;
+    }
+    function maxPoolPositions(xValues, xShape, dtype, convInfo, flattenPositions = false, includeBatchInIndex = false) {
+        const maxPositions = buffer(convInfo.outShape, 'int32');
+        const strideHeight = convInfo.strideHeight;
+        const strideWidth = convInfo.strideWidth;
+        const dilationHeight = convInfo.dilationHeight;
+        const dilationWidth = convInfo.dilationWidth;
+        const effectiveFilterHeight = convInfo.effectiveFilterHeight;
+        const effectiveFilterWidth = convInfo.effectiveFilterWidth;
+        const padTop = convInfo.padInfo.top;
+        const padLeft = convInfo.padInfo.left;
+        const xBuf = buffer(xShape, dtype, xValues);
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            for (let d = 0; d < convInfo.inChannels; ++d) {
+                for (let yR = 0; yR < convInfo.outHeight; ++yR) {
+                    const xRCorner = yR * strideHeight - padTop;
+                    let xRMin = xRCorner;
+                    while (xRMin < 0) {
+                        xRMin += dilationHeight;
+                    }
+                    // const xRMin = Math.max(0, xRCorner);
+                    const xRMax = Math.min(convInfo.inHeight, effectiveFilterHeight + xRCorner);
+                    for (let yC = 0; yC < convInfo.outWidth; ++yC) {
+                        const xCCorner = yC * strideWidth - padLeft;
+                        let xCMin = xCCorner;
+                        while (xCMin < 0) {
+                            xCMin += dilationWidth;
+                        }
+                        const xCMax = Math.min(convInfo.inWidth, effectiveFilterWidth + xCCorner);
+                        let maxValue = Number.NEGATIVE_INFINITY;
+                        let maxPosition = -1;
+                        for (let xR = xRMin; xR < xRMax; xR += dilationHeight) {
+                            const wR = xR - xRCorner;
+                            for (let xC = xCMin; xC < xCMax; xC += dilationWidth) {
+                                const wC = xC - xCCorner;
+                                const pixel = xBuf.get(b, xR, xC, d);
+                                if (pixel > maxValue) {
+                                    maxValue = pixel;
+                                    if (flattenPositions) {
+                                        maxPosition = includeBatchInIndex ?
+                                            ((b * convInfo.inHeight + xR) * convInfo.inWidth + xC) *
+                                                convInfo.inChannels +
+                                                d :
+                                            (xR * convInfo.inWidth + xC) * convInfo.inChannels + d;
+                                    }
+                                    else {
+                                        maxPosition = wR * effectiveFilterWidth + wC;
+                                    }
+                                }
+                            }
+                        }
+                        maxPositions.set(maxPosition, b, yR, yC, d);
+                    }
+                }
+            }
+        }
+        return maxPositions;
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function avgPool$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        assertNotComplex(x, 'avgPool');
+        const { filterSize, strides, pad, dimRoundingMode } = attrs;
+        const dilations = 1;
+        assert(eitherStridesOrDilationsAreOne(strides, dilations), () => 'Error in avgPool: Either strides or dilations must be 1. ' +
+            `Got strides ${strides} and dilations '${dilations}'`);
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, dilations, pad, dimRoundingMode);
+        let res;
+        if (convInfo.filterWidth === 1 && convInfo.filterHeight === 1 &&
+            arraysEqual(convInfo.inShape, convInfo.outShape)) {
+            res = identity({ inputs: { x }, backend });
+        }
+        else {
+            const xValues = backend.data.get(x.dataId).values;
+            const strides = computeStrides(x.shape);
+            const buffer = pool$1(xValues, x.shape, x.dtype, strides, convInfo, 'avg');
+            res = backend.makeTensorInfo(convInfo.outShape, x.dtype, buffer.values);
+        }
+        return res;
+    }
+    const avgPoolConfig = {
+        kernelName: AvgPool,
+        backendName: 'cpu',
+        kernelFunc: avgPool$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function avgPoolBackprop$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, input } = inputs;
+        const x = input;
+        assertNotComplex([dy, input], 'avgPoolBackprop');
+        const { filterSize, strides, pad } = attrs;
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, 1 /* dilations */, pad);
+        const strideHeight = convInfo.strideHeight;
+        const strideWidth = convInfo.strideWidth;
+        const filterHeight = convInfo.filterHeight;
+        const filterWidth = convInfo.filterWidth;
+        const dilationHeight = convInfo.dilationHeight;
+        const dilationWidth = convInfo.dilationWidth;
+        const effectiveFilterHeight = convInfo.effectiveFilterHeight;
+        const effectiveFilterWidth = convInfo.effectiveFilterWidth;
+        const padLeft = effectiveFilterWidth - 1 - convInfo.padInfo.left;
+        const padTop = effectiveFilterHeight - 1 - convInfo.padInfo.top;
+        const dx = buffer(x.shape, 'float32');
+        const avgMultiplier = 1 / (filterHeight * filterWidth);
+        const dyData = backend.data.get(dy.dataId).values;
+        const dyBuf = buffer(dy.shape, 'float32', dyData);
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            for (let d = 0; d < convInfo.inChannels; ++d) {
+                for (let dxR = 0; dxR < convInfo.inHeight; ++dxR) {
+                    for (let dxC = 0; dxC < convInfo.inWidth; ++dxC) {
+                        // Shader code begins.
+                        const dyRCorner = dxR - padTop;
+                        const dyCCorner = dxC - padLeft;
+                        let dotProd = 0;
+                        for (let wR = 0; wR < effectiveFilterHeight; wR += dilationHeight) {
+                            const dyR = (dyRCorner + wR) / strideHeight;
+                            if (dyR < 0 || dyR >= convInfo.outHeight ||
+                                Math.floor(dyR) !== dyR) {
+                                continue;
+                            }
+                            for (let wC = 0; wC < effectiveFilterWidth; wC += dilationWidth) {
+                                const dyC = (dyCCorner + wC) / strideWidth;
+                                if (dyC < 0 || dyC >= convInfo.outWidth ||
+                                    Math.floor(dyC) !== dyC) {
+                                    continue;
+                                }
+                                const pixel = dyBuf.get(b, dyR, dyC, d);
+                                dotProd += pixel;
+                            }
+                        }
+                        dx.set(dotProd * avgMultiplier, b, dxR, dxC, d);
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dx.shape, dx.dtype, dx.values);
+    }
+    const avgPoolBackpropConfig = {
+        kernelName: AvgPoolBackprop,
+        backendName: 'cpu',
+        kernelFunc: avgPoolBackprop$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function batchNormKernelFunc(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, scale, offset, mean, variance } = inputs;
+        assert(mean.shape.length === variance.shape.length, () => 'Batch normalization gradient requires mean and variance to have ' +
+            'equal ranks.');
+        assert(offset == null || mean.shape.length === offset.shape.length, () => 'Batch normalization gradient requires mean and offset to have ' +
+            'equal ranks.');
+        assert(scale == null || mean.shape.length === scale.shape.length, () => 'Batch normalization gradient requires mean and scale to have ' +
+            'equal ranks.');
+        assertNotComplex([x, mean, variance, scale, offset], 'batchNorm');
+        let { varianceEpsilon } = attrs;
+        if (varianceEpsilon == null) {
+            varianceEpsilon = 0.001;
+        }
+        const xVals = backend.data.get(x.dataId).values;
+        const mVals = backend.data.get(mean.dataId).values;
+        const varVals = backend.data.get(variance.dataId).values;
+        const sVals = scale ? backend.data.get(scale.dataId).values :
+            new Float32Array([1]);
+        const offVals = offset ?
+            backend.data.get(offset.dataId).values :
+            new Float32Array([0]);
+        const outVals = new Float32Array(xVals.length);
+        const offValsLength = offVals.length;
+        const sValsLength = sVals.length;
+        const varValsLength = varVals.length;
+        const mValsLength = mVals.length;
+        let offi = 0;
+        let mi = 0;
+        let si = 0;
+        let vi = 0;
+        for (let i = 0; i < xVals.length; ++i) {
+            outVals[i] = offVals[offi++] +
+                (xVals[i] - mVals[mi++]) * sVals[si++] /
+                    Math.sqrt(varVals[vi++] + varianceEpsilon);
+            if (offi >= offValsLength) {
+                offi = 0;
+            }
+            if (mi >= mValsLength) {
+                mi = 0;
+            }
+            if (si >= sValsLength) {
+                si = 0;
+            }
+            if (vi >= varValsLength) {
+                vi = 0;
+            }
+        }
+        return backend.makeTensorInfo(x.shape, x.dtype, outVals);
+    }
+    const batchNormConfig = {
+        kernelName: FusedBatchNorm,
+        backendName: 'cpu',
+        kernelFunc: batchNormKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const clipKernelFunc = unaryKernelFunc(ClipByValue, (xi, attrs) => {
+        const clipAttrs = attrs;
+        if (xi > clipAttrs.clipValueMax) {
+            return clipAttrs.clipValueMax;
+        }
+        return xi < clipAttrs.clipValueMin ? clipAttrs.clipValueMin : xi;
+    });
+    const clipConfig = {
+        kernelName: ClipByValue,
+        backendName: 'cpu',
+        kernelFunc: clipKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function imag$1(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        const imag = backend.data.get(input.dataId).complexTensorInfos.imag;
+        const imagVal = backend.data.get(imag.dataId).values;
+        // When complex tensor is disposed, its underlying parts will be disposed too.
+        // Make new tensor out of the imag value of the complex. This makes sure the
+        // value is still accessible even if complex tensor is disposed.
+        return backend.makeTensorInfo(imag.shape, imag.dtype, imagVal);
+    }
+    const imagConfig = {
+        kernelName: Imag,
+        backendName: 'cpu',
+        kernelFunc: imag$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function reshape$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { shape } = attrs;
+        const xSize = sizeFromShape(x.shape);
+        const $shape = inferFromImplicitShape(shape, xSize);
+        const $xSize = sizeFromShape($shape);
+        assert(xSize === $xSize, () => `The new shape (${$shape}) has ${$xSize} elements and the old ` +
+            `shape (${x.shape}) has ${xSize} elements. The new shape and old ` +
+            `shape must have the same number of elements.`);
+        backend.incRef(x.dataId);
+        const xData = backend.data.get(x.dataId);
+        if (xData.complexTensorInfos != null) {
+            const real = xData.complexTensorInfos.real;
+            const imag = xData.complexTensorInfos.imag;
+            real.shape = $shape;
+            imag.shape = $shape;
+        }
+        return { dataId: x.dataId, shape: $shape, dtype: x.dtype };
+    }
+    const reshapeConfig = {
+        kernelName: Reshape,
+        backendName: 'cpu',
+        kernelFunc: reshape$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function concat$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { axis } = attrs;
+        const $axis = parseAxisParam(axis, inputs[0].shape)[0];
+        let outShape = computeOutShape$1(inputs.map(t => t.shape), $axis);
+        if (sizeFromShape(outShape) === 0) {
+            return backend.makeTensorInfo(outShape, inputs[0].dtype, []);
+        }
+        // Keep only non-empty tensors (ignore tensors with 0 in their shape).
+        const $inputs = inputs.filter(t => sizeFromShape(t.shape) > 0);
+        if ($inputs.length === 1) {
+            return $inputs[0];
+        }
+        const shapes = $inputs.map(t => t.shape);
+        assertParamsConsistent(shapes, $axis);
+        if ($inputs[0].dtype === 'complex64') {
+            const reals = $inputs.map((t) => real$1({ inputs: { input: t }, backend }));
+            const imags = $inputs.map((t) => imag$1({ inputs: { input: t }, backend }));
+            const realConcated = concat$1({ inputs: reals, backend, attrs: { axis } });
+            const imagConcated = concat$1({ inputs: imags, backend, attrs: { axis } });
+            const result = complex$1({ inputs: { real: realConcated, imag: imagConcated }, backend });
+            reals.forEach(r => backend.disposeIntermediateTensorInfo(r));
+            imags.forEach(i => backend.disposeIntermediateTensorInfo(i));
+            backend.disposeIntermediateTensorInfo(realConcated);
+            backend.disposeIntermediateTensorInfo(imagConcated);
+            return result;
+        }
+        // Any concat of n-dimensional tensors across any axis can be reduced to
+        // a concatenation of two-dimensional tensors across the axis 1 by first
+        // partitioning the axes of the original tensors into those less than the
+        // axis to be concatenated and the rest. Then reshape the tensors
+        // into a two-dimensional tensor by collapsing these two sets of axes and
+        // concatenate the resulting matrices across the axis 1, finally reshaping
+        // the result to have the proper shape.
+        const inputs2D = $inputs.map(t => {
+            const innerSize = sizeFromShape(t.shape.slice($axis));
+            const shape = [-1, innerSize];
+            return reshape$1({ inputs: { x: t }, backend, attrs: { shape } });
+        });
+        // Concats 2d tensors along axis=1.
+        outShape =
+            computeOutShape$1(inputs2D.map(t => t.shape), 1 /* axis */);
+        const outVals = getTypedArrayFromDType($inputs[0].dtype, sizeFromShape(outShape));
+        if (inputs2D[0].shape[0] === 1) {
+            // Use built-in TypedArray.set() method for speed.
+            let offset = 0;
+            inputs2D.forEach(t => {
+                const val = backend.data.get(t.dataId).values;
+                const size = sizeFromShape(t.shape);
+                outVals.set(val, offset);
+                offset += size;
+            });
+        }
+        else {
+            let colOffset = 0;
+            inputs2D.forEach(t => {
+                const tVals = backend.data.get(t.dataId).values;
+                let tIdx = 0;
+                for (let row = 0; row < t.shape[0]; ++row) {
+                    const resIdx = row * outShape[1] + colOffset;
+                    for (let col = 0; col < t.shape[1]; ++col) {
+                        outVals[resIdx + col] = tVals[tIdx++];
+                    }
+                }
+                colOffset += t.shape[1];
+            });
+        }
+        const finalOutShape = computeOutShape$1($inputs.map(t => t.shape), $axis);
+        const outInfo = backend.makeTensorInfo(finalOutShape, inputs[0].dtype, outVals);
+        inputs2D.forEach(t => backend.disposeIntermediateTensorInfo(t));
+        return outInfo;
+    }
+    const concatConfig = {
+        kernelName: Concat,
+        backendName: 'cpu',
+        kernelFunc: concat$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const cosKernelFunc = unaryKernelFunc(Cos, (xi) => Math.cos(xi));
     const cosConfig = {
         kernelName: Cos,
         backendName: 'cpu',
-        kernelFunc: ({ inputs, backend }) => {
-            const { x } = inputs;
-            const cpuBackend = backend;
-            assertNotComplex(x, 'cos');
-            const values = cpuBackend.data.get(x.dataId).values;
-            const xSize = sizeFromShape(x.shape);
-            const newValues = new Float32Array(xSize);
-            for (let i = 0; i < xSize; ++i) {
-                newValues[i] = Math.cos(values[i]);
-            }
-            const dataId = cpuBackend.write(newValues, x.shape, x.dtype);
-            return { dataId, shape: x.shape, dtype: x.dtype };
-        }
+        kernelFunc: cosKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const coshKernelFunc = unaryKernelFunc(Cosh, (xi) => Math.cosh(xi));
+    const coshConfig = {
+        kernelName: Cosh,
+        backendName: 'cpu',
+        kernelFunc: coshKernelFunc,
     };
 
     /**
@@ -53873,54 +54568,288 @@
      * limitations under the License.
      * =============================================================================
      */
-    function createBinaryKernelConfig(name, op) {
-        return {
-            kernelName: name,
-            backendName: 'cpu',
-            kernelFunc: ({ inputs, backend }) => {
-                const { a, b } = inputs;
-                const cpuBackend = backend;
-                assertNotComplex([a, b], name);
-                const aVals = cpuBackend.data.get(a.dataId).values;
-                const bVals = cpuBackend.data.get(b.dataId).values;
-                const [resultData, resultShape] = op(a.shape, b.shape, aVals, bVals, a.dtype);
-                const dataId = cpuBackend.write(resultData, resultShape, a.dtype);
-                return { dataId, shape: resultShape, dtype: a.dtype };
+    const divImpl = createSimpleBinaryKernelImpl((a, b) => a / b);
+    const div$1 = binaryKernelFunc(Div, divImpl);
+    const divConfig = {
+        kernelName: Div,
+        backendName: 'cpu',
+        kernelFunc: div$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const eluKernelFunc = unaryKernelFunc(Elu, (xi) => xi >= 0 ? xi : (Math.exp(xi) - 1));
+    const eluConfig = {
+        kernelName: Elu,
+        backendName: 'cpu',
+        kernelFunc: eluKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const p = ERF_P;
+    const a1 = ERF_A1;
+    const a2 = ERF_A2;
+    const a3 = ERF_A3;
+    const a4 = ERF_A4;
+    const a5 = ERF_A5;
+    const erfKernelFunc = unaryKernelFunc(Erf, (xi) => {
+        const sign = Math.sign(xi);
+        const v = Math.abs(xi);
+        const t = 1.0 / (1.0 + p * v);
+        return sign *
+            (1.0 -
+                (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t *
+                    Math.exp(-v * v));
+    });
+    const erfConfig = {
+        kernelName: Erf,
+        backendName: 'cpu',
+        kernelFunc: erfKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Calculate FFT of inner most elements of batch tensor.
+     */
+    function fftBatch(input, inverse, cpuBackend) {
+        const inputShape = input.shape;
+        const batch = inputShape[0];
+        const innerDim = inputShape[1];
+        const inputVals = cpuBackend.data.get(input.dataId);
+        const real2D = inputVals.complexTensorInfos.real;
+        const imag2D = inputVals.complexTensorInfos.imag;
+        // Collects real and imaginary values separately.
+        const resultShape = [batch, innerDim];
+        const resultSize = sizeFromShape(resultShape);
+        const resultReal = getTypedArrayFromDType('float32', resultSize);
+        const resultImag = getTypedArrayFromDType('float32', resultSize);
+        for (let b = 0; b < batch; b++) {
+            // TODO: Support slice ops for complex type.
+            const r = slice$1({
+                inputs: { x: real2D },
+                backend: cpuBackend,
+                attrs: { begin: [b, 0], size: [1, innerDim] }
+            });
+            const i = slice$1({
+                inputs: { x: imag2D },
+                backend: cpuBackend,
+                attrs: { begin: [b, 0], size: [1, innerDim] }
+            });
+            const input = complex$1({ inputs: { real: r, imag: i }, backend: cpuBackend });
+            // Run FFT by batch element.
+            const { real, imag } = fftImpl(input, inverse, cpuBackend);
+            const res = mergeRealAndImagArrays(real, imag);
+            for (let d = 0; d < innerDim; d++) {
+                const c = getComplexWithIndex(res, d);
+                resultReal[b * innerDim + d] = c.real;
+                resultImag[b * innerDim + d] = c.imag;
             }
-        };
+            cpuBackend.disposeIntermediateTensorInfo(r);
+            cpuBackend.disposeIntermediateTensorInfo(i);
+            cpuBackend.disposeIntermediateTensorInfo(input);
+        }
+        const $realInfo = cpuBackend.makeTensorInfo(resultShape, 'float32', resultReal);
+        const $imagInfo = cpuBackend.makeTensorInfo(resultShape, 'float32', resultImag);
+        const result = complex$1({ inputs: { real: $realInfo, imag: $imagInfo }, backend: cpuBackend });
+        cpuBackend.disposeIntermediateTensorInfo($realInfo);
+        cpuBackend.disposeIntermediateTensorInfo($imagInfo);
+        return result;
     }
-    function createBinaryKernelImpl(op) {
-        return (aShape, bShape, aVals, bVals, dtype) => {
-            const newShape = assertAndGetBroadcastShape(aShape, bShape);
-            const resultRank = newShape.length;
-            const resultStrides = computeStrides(newShape);
-            const resultSize = sizeFromShape(newShape);
-            const result = getTypedArrayFromDType(dtype, resultSize);
-            const aRank = aShape.length;
-            const bRank = bShape.length;
-            const aStrides = computeStrides(aShape);
-            const bStrides = computeStrides(bShape);
-            const aBroadcastDims = getBroadcastDims(aShape, newShape);
-            const bBroadcastDims = getBroadcastDims(bShape, newShape);
-            if (aBroadcastDims.length + bBroadcastDims.length === 0) {
-                for (let i = 0; i < result.length; ++i) {
-                    result[i] = op(aVals[i % aVals.length], bVals[i % bVals.length]);
-                }
+    function fftImpl(input, inverse, cpuBackend) {
+        const inputSize = sizeFromShape(input.shape);
+        const inputVals = cpuBackend.data.get(input.dataId);
+        const realVals = cpuBackend.data.get(inputVals.complexTensorInfos.real.dataId).values;
+        const imagVals = cpuBackend.data.get(inputVals.complexTensorInfos.imag.dataId).values;
+        if (isExponentOf2(inputSize)) {
+            const result = fftRadix2(realVals, imagVals, inputSize, inverse, cpuBackend);
+            const resultShape = [input.shape[0], input.shape[1]];
+            if (inverse) {
+                const realInfo = cpuBackend.makeTensorInfo(resultShape, 'float32', result.real);
+                const imagInfo = cpuBackend.makeTensorInfo(resultShape, 'float32', result.imag);
+                const sizeInfo = cpuBackend.makeTensorInfo([], 'float32', createScalarValue(inputSize, 'float32'));
+                const sizeInfoCopy = identity({ inputs: { x: sizeInfo }, backend: cpuBackend });
+                const divRealInfo = divConfig.kernelFunc({ inputs: { a: realInfo, b: sizeInfo }, backend: cpuBackend });
+                const divImagInfo = divConfig.kernelFunc({ inputs: { a: imagInfo, b: sizeInfoCopy }, backend: cpuBackend });
+                const divRealVals = cpuBackend.data.get(divRealInfo.dataId).values;
+                const divImagVals = cpuBackend.data.get(divImagInfo.dataId).values;
+                cpuBackend.disposeIntermediateTensorInfo(realInfo);
+                cpuBackend.disposeIntermediateTensorInfo(imagInfo);
+                cpuBackend.disposeIntermediateTensorInfo(sizeInfo);
+                cpuBackend.disposeIntermediateTensorInfo(sizeInfoCopy);
+                cpuBackend.disposeIntermediateTensorInfo(divRealInfo);
+                cpuBackend.disposeIntermediateTensorInfo(divImagInfo);
+                return { real: divRealVals, imag: divImagVals };
             }
-            else {
-                for (let i = 0; i < result.length; ++i) {
-                    const loc = indexToLoc(i, resultRank, resultStrides);
-                    const aLoc = loc.slice(-aRank);
-                    aBroadcastDims.forEach(d => aLoc[d] = 0);
-                    const aIndex = locToIndex(aLoc, aRank, aStrides);
-                    const bLoc = loc.slice(-bRank);
-                    bBroadcastDims.forEach(d => bLoc[d] = 0);
-                    const bIndex = locToIndex(bLoc, bRank, bStrides);
-                    result[i] = op(aVals[aIndex], bVals[bIndex]);
-                }
+            return result;
+        }
+        else {
+            const data = mergeRealAndImagArrays(realVals, imagVals);
+            const rawOutput = fourierTransformByMatmul(data, inputSize, inverse);
+            return splitRealAndImagArrays(rawOutput);
+        }
+    }
+    function isExponentOf2(size) {
+        return (size & size - 1) === 0;
+    }
+    // FFT using Cooley-Tukey algorithm on radix 2 dimensional input.
+    function fftRadix2(realVals, imagVals, size, inverse, cpuBackend) {
+        if (size === 1) {
+            return { real: realVals, imag: imagVals };
+        }
+        const data = mergeRealAndImagArrays(realVals, imagVals);
+        const half = size / 2;
+        const evenComplex = complexWithEvenIndex(data);
+        const evenRealVals = evenComplex.real;
+        const evenImagVals = evenComplex.imag;
+        const evenShape = [evenRealVals.length];
+        const evenRealInfo = cpuBackend.makeTensorInfo(evenShape, 'float32', evenRealVals);
+        const evenImagInfo = cpuBackend.makeTensorInfo(evenShape, 'float32', evenImagVals);
+        const evenTensorInfo = complex$1({ inputs: { real: evenRealInfo, imag: evenImagInfo }, backend: cpuBackend });
+        const oddComplex = complexWithOddIndex(data);
+        const oddRealVals = oddComplex.real;
+        const oddImagVals = oddComplex.imag;
+        const oddShape = [oddRealVals.length];
+        const oddRealInfo = cpuBackend.makeTensorInfo(oddShape, 'float32', oddRealVals);
+        const oddImagInfo = cpuBackend.makeTensorInfo(oddShape, 'float32', oddImagVals);
+        const oddTensorInfo = complex$1({ inputs: { real: oddRealInfo, imag: oddImagInfo }, backend: cpuBackend });
+        // Recursive call for half part of original input.
+        const $evenComplex = fftRadix2(evenRealVals, evenImagVals, half, inverse, cpuBackend);
+        const $evenRealVals = $evenComplex.real;
+        const $evenImagVals = $evenComplex.imag;
+        const $evenShape = [$evenRealVals.length];
+        const $evenRealInfo = cpuBackend.makeTensorInfo($evenShape, 'float32', $evenRealVals);
+        const $evenImagInfo = cpuBackend.makeTensorInfo($evenShape, 'float32', $evenImagVals);
+        const $evenTensorInfo = complex$1({
+            inputs: { real: $evenRealInfo, imag: $evenImagInfo },
+            backend: cpuBackend
+        });
+        const $oddComplex = fftRadix2(oddRealVals, oddImagVals, half, inverse, cpuBackend);
+        const $oddRealVals = $oddComplex.real;
+        const $oddImagVals = $oddComplex.imag;
+        const $oddShape = [$oddRealVals.length];
+        const $oddRealInfo = cpuBackend.makeTensorInfo($oddShape, 'float32', $oddRealVals);
+        const $oddImagInfo = cpuBackend.makeTensorInfo($oddShape, 'float32', $oddImagVals);
+        const $oddTensorInfo = complex$1({ inputs: { real: $oddRealInfo, imag: $oddImagInfo }, backend: cpuBackend });
+        const e = exponents(size, inverse);
+        const eShape = [e.real.length];
+        const eRealInfo = cpuBackend.makeTensorInfo(eShape, 'float32', e.real);
+        const eImagInfo = cpuBackend.makeTensorInfo(eShape, 'float32', e.imag);
+        const complexInfo = complex$1({ inputs: { real: eRealInfo, imag: eImagInfo }, backend: cpuBackend });
+        const exponentInfo = multiply({ inputs: { a: complexInfo, b: $oddTensorInfo }, backend: cpuBackend });
+        const addPart = add$2({
+            inputs: { a: $evenTensorInfo, b: exponentInfo },
+            backend: cpuBackend
+        });
+        const subPart = sub$1({
+            inputs: { a: $evenTensorInfo, b: exponentInfo },
+            backend: cpuBackend
+        });
+        const addPartReal = real$1({ inputs: { input: addPart }, backend: cpuBackend });
+        const subPartReal = real$1({ inputs: { input: subPart }, backend: cpuBackend });
+        const addPartImag = imag$1({ inputs: { input: addPart }, backend: cpuBackend });
+        const subPartImag = imag$1({ inputs: { input: subPart }, backend: cpuBackend });
+        const $real = concat$1({
+            inputs: [addPartReal, subPartReal],
+            backend: cpuBackend,
+            attrs: { axis: 0 }
+        });
+        const $imag = concat$1({
+            inputs: [addPartImag, subPartImag],
+            backend: cpuBackend,
+            attrs: { axis: 0 }
+        });
+        const $realVals = cpuBackend.data.get($real.dataId).values;
+        const $imagVals = cpuBackend.data.get($imag.dataId).values;
+        cpuBackend.disposeIntermediateTensorInfo(evenRealInfo);
+        cpuBackend.disposeIntermediateTensorInfo(evenImagInfo);
+        cpuBackend.disposeIntermediateTensorInfo(evenTensorInfo);
+        cpuBackend.disposeIntermediateTensorInfo(oddRealInfo);
+        cpuBackend.disposeIntermediateTensorInfo(oddImagInfo);
+        cpuBackend.disposeIntermediateTensorInfo(oddTensorInfo);
+        cpuBackend.disposeIntermediateTensorInfo($evenRealInfo);
+        cpuBackend.disposeIntermediateTensorInfo($evenImagInfo);
+        cpuBackend.disposeIntermediateTensorInfo($evenTensorInfo);
+        cpuBackend.disposeIntermediateTensorInfo($oddRealInfo);
+        cpuBackend.disposeIntermediateTensorInfo($oddImagInfo);
+        cpuBackend.disposeIntermediateTensorInfo($oddTensorInfo);
+        cpuBackend.disposeIntermediateTensorInfo(eRealInfo);
+        cpuBackend.disposeIntermediateTensorInfo(eImagInfo);
+        cpuBackend.disposeIntermediateTensorInfo(complexInfo);
+        cpuBackend.disposeIntermediateTensorInfo(exponentInfo);
+        cpuBackend.disposeIntermediateTensorInfo(addPart);
+        cpuBackend.disposeIntermediateTensorInfo(subPart);
+        cpuBackend.disposeIntermediateTensorInfo(addPartReal);
+        cpuBackend.disposeIntermediateTensorInfo(addPartImag);
+        cpuBackend.disposeIntermediateTensorInfo(subPartReal);
+        cpuBackend.disposeIntermediateTensorInfo(subPartImag);
+        cpuBackend.disposeIntermediateTensorInfo($real);
+        cpuBackend.disposeIntermediateTensorInfo($imag);
+        return { real: $realVals, imag: $imagVals };
+    }
+    // Calculate fourier transform by multplying sinusoid matrix.
+    function fourierTransformByMatmul(data, size, inverse) {
+        const ret = new Float32Array(size * 2);
+        // TODO: Use matmul instead once it supports complex64 type.
+        for (let r = 0; r < size; r++) {
+            let real = 0.0;
+            let imag = 0.0;
+            for (let c = 0; c < size; c++) {
+                const e = exponent(r * c, size, inverse);
+                const term = getComplexWithIndex(data, c);
+                real += term.real * e.real - term.imag * e.imag;
+                imag += term.real * e.imag + term.imag * e.real;
             }
-            return [result, newShape];
-        };
+            if (inverse) {
+                real /= size;
+                imag /= size;
+            }
+            assignToTypedArray(ret, real, imag, r);
+        }
+        return ret;
     }
 
     /**
@@ -53939,25 +54868,29 @@
      * limitations under the License.
      * =============================================================================
      */
-    const divImpl = createBinaryKernelImpl((a, b) => a / b);
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    const divConfig = createBinaryKernelConfig(Div, divImpl);
+    function fft$1(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        const inputSize = sizeFromShape(input.shape);
+        // Collapse all outer dimensions to a single batch dimension.
+        const innerDimensionSize = input.shape[input.shape.length - 1];
+        const batch = inputSize / innerDimensionSize;
+        const input2D = reshape$1({
+            inputs: { x: input },
+            backend,
+            attrs: { shape: [batch, innerDimensionSize] }
+        });
+        const result = fftBatch(input2D, false, backend);
+        const resultReshaped = reshape$1({ inputs: { x: result }, backend, attrs: { shape: input.shape } });
+        backend.disposeIntermediateTensorInfo(input2D);
+        backend.disposeIntermediateTensorInfo(result);
+        return resultReshaped;
+    }
+    const fftConfig = {
+        kernelName: FFT,
+        backendName: 'cpu',
+        kernelFunc: fft$1
+    };
 
     /**
      * @license
@@ -54029,16 +54962,143 @@
      * limitations under the License.
      * =============================================================================
      */
-    function identity(args) {
+    function ifft$1(args) {
         const { inputs, backend } = args;
-        const { x } = inputs;
-        backend.incRef(x.dataId);
-        return { dataId: x.dataId, shape: x.shape, dtype: x.dtype };
+        const { input } = inputs;
+        const inputSize = sizeFromShape(input.shape);
+        // Collapse all outer dimensions to a single batch dimension.
+        const innerDimensionSize = input.shape[input.shape.length - 1];
+        const batch = inputSize / innerDimensionSize;
+        const input2D = reshape$1({
+            inputs: { x: input },
+            backend,
+            attrs: { shape: [batch, innerDimensionSize] }
+        });
+        const result = fftBatch(input2D, true, backend);
+        const resultReshaped = reshape$1({ inputs: { x: result }, backend, attrs: { shape: input.shape } });
+        backend.disposeIntermediateTensorInfo(input2D);
+        backend.disposeIntermediateTensorInfo(result);
+        return resultReshaped;
     }
-    const identityConfig = {
-        kernelName: Identity,
+    const ifftConfig = {
+        kernelName: IFFT,
         backendName: 'cpu',
-        kernelFunc: identity
+        kernelFunc: ifft$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const isFiniteKernelFunc = unaryKernelFunc(IsFinite, (xi) => Number.isFinite(xi) ? 1 : 0, 'bool');
+    const isFiniteConfig = {
+        kernelName: IsFinite,
+        backendName: 'cpu',
+        kernelFunc: isFiniteKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const isInfKernelFunc = unaryKernelFunc(IsInf, (xi) => Math.abs(xi) === Infinity ? 1 : 0, 'bool');
+    const isInfConfig = {
+        kernelName: IsInf,
+        backendName: 'cpu',
+        kernelFunc: isInfKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const isNaNKernelFunc = unaryKernelFunc(IsNan, (xi) => Number.isNaN(xi) ? 1 : 0, 'bool');
+    const isNaNConfig = {
+        kernelName: IsNan,
+        backendName: 'cpu',
+        kernelFunc: isNaNKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const log1pKernelFunc = unaryKernelFunc(Log1p, (xi) => Math.log1p(xi));
+    const log1pConfig = {
+        kernelName: Log1p,
+        backendName: 'cpu',
+        kernelFunc: log1pKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const logicalNotKernelFunc = unaryKernelFunc(LogicalNot, (xi) => xi ? 0 : 1, 'bool');
+    const logicalNotConfig = {
+        kernelName: LogicalNot,
+        backendName: 'cpu',
+        kernelFunc: logicalNotKernelFunc,
     };
 
     /**
@@ -54093,6 +55153,130 @@
             }
             return { dataId, shape: outShape, dtype: x.dtype };
         }
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function maxPool$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        assertNotComplex(x, 'maxPool');
+        const { filterSize, strides, pad, dimRoundingMode } = attrs;
+        const dilations = 1;
+        assert(eitherStridesOrDilationsAreOne(strides, dilations), () => 'Error in maxPool: Either strides or dilations must be 1. ' +
+            `Got strides ${strides} and dilations '${dilations}'`);
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, dilations, pad, dimRoundingMode);
+        let res;
+        if (convInfo.filterWidth === 1 && convInfo.filterHeight === 1 &&
+            arraysEqual(convInfo.inShape, convInfo.outShape)) {
+            res = identity({ inputs: { x }, backend });
+        }
+        else {
+            const xValues = backend.data.get(x.dataId).values;
+            const strides = computeStrides(x.shape);
+            const buffer = pool$1(xValues, x.shape, x.dtype, strides, convInfo, 'max');
+            res = backend.makeTensorInfo(convInfo.outShape, x.dtype, buffer.values);
+        }
+        return res;
+    }
+    const maxPoolConfig = {
+        kernelName: MaxPool,
+        backendName: 'cpu',
+        kernelFunc: maxPool$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function maxPoolBackprop$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, input, output } = inputs;
+        const x = input;
+        assertNotComplex([input, output], 'maxPoolBackprop');
+        const { filterSize, strides, pad, dimRoundingMode } = attrs;
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, 1 /* dilations */, pad, dimRoundingMode);
+        const xValues = backend.data.get(x.dataId).values;
+        const maxPosBuf = buffer(convInfo.outShape, x.dtype, maxPoolPositions(xValues, x.shape, x.dtype, convInfo).values);
+        const strideHeight = convInfo.strideHeight;
+        const strideWidth = convInfo.strideWidth;
+        const dilationHeight = convInfo.dilationHeight;
+        const dilationWidth = convInfo.dilationWidth;
+        const effectiveFilterHeight = convInfo.effectiveFilterHeight;
+        const effectiveFilterWidth = convInfo.effectiveFilterWidth;
+        const padLeft = effectiveFilterWidth - 1 - convInfo.padInfo.left;
+        const padTop = effectiveFilterHeight - 1 - convInfo.padInfo.top;
+        const dx = buffer(x.shape, 'float32');
+        const dyData = backend.data.get(dy.dataId).values;
+        const dyBuf = buffer(dy.shape, 'float32', dyData);
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            for (let d = 0; d < convInfo.inChannels; ++d) {
+                for (let dxR = 0; dxR < convInfo.inHeight; ++dxR) {
+                    for (let dxC = 0; dxC < convInfo.inWidth; ++dxC) {
+                        // Shader code begins.
+                        const dyRCorner = dxR - padTop;
+                        const dyCCorner = dxC - padLeft;
+                        let dotProd = 0;
+                        for (let wR = 0; wR < effectiveFilterHeight; wR += dilationHeight) {
+                            const dyR = (dyRCorner + wR) / strideHeight;
+                            if (dyR < 0 || dyR >= convInfo.outHeight ||
+                                Math.floor(dyR) !== dyR) {
+                                continue;
+                            }
+                            for (let wC = 0; wC < effectiveFilterWidth; wC += dilationWidth) {
+                                const dyC = (dyCCorner + wC) / strideWidth;
+                                if (dyC < 0 || dyC >= convInfo.outWidth ||
+                                    Math.floor(dyC) !== dyC) {
+                                    continue;
+                                }
+                                const maxPos = effectiveFilterHeight * effectiveFilterWidth - 1 -
+                                    maxPosBuf.get(b, dyR, dyC, d);
+                                const curPos = wR * effectiveFilterWidth + wC;
+                                const mask = maxPos === curPos ? 1 : 0;
+                                if (mask === 0) {
+                                    continue;
+                                }
+                                const pixel = dyBuf.get(b, dyR, dyC, d);
+                                dotProd += pixel * mask;
+                            }
+                        }
+                        dx.set(dotProd, b, dxR, dxC, d);
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dx.shape, dx.dtype, dx.values);
+    }
+    const maxPoolBackpropConfig = {
+        kernelName: MaxPoolBackprop,
+        backendName: 'cpu',
+        kernelFunc: maxPoolBackprop$1
     };
 
     /**
@@ -54238,6 +55422,30 @@
      * limitations under the License.
      * =============================================================================
      */
+    const notEqualImpl = createSimpleBinaryKernelImpl(((a, b) => (a !== b) ? 1 : 0));
+    const notEqual$1 = binaryKernelFunc(NotEqual, notEqualImpl, null /* complexOp */, 'bool');
+    const notEqualConfig = {
+        kernelName: NotEqual,
+        backendName: 'cpu',
+        kernelFunc: notEqual$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
     function padV2(args) {
         const { inputs, backend, attrs } = args;
         const { x } = inputs;
@@ -54274,30 +55482,24 @@
     /**
      * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
+     * Licensed under the Apache License, Version 2.0 (the License);
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
      *
      * http://www.apache.org/licenses/LICENSE-2.0
      *
      * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
+     * distributed under the License is distributed on an AS IS BASIS,
      * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
      * See the License for the specific language governing permissions and
      * limitations under the License.
      * =============================================================================
      */
-    function reshape$1(args) {
-        const { inputs, backend, attrs } = args;
-        const { x } = inputs;
-        const { shape } = attrs;
-        backend.incRef(x.dataId);
-        return { dataId: x.dataId, shape, dtype: x.dtype };
-    }
-    const reshapeConfig = {
-        kernelName: Reshape,
+    const reciprocalKernelFunc = unaryKernelFunc(Reciprocal, (xi) => 1 / xi);
+    const reciprocalConfig = {
+        kernelName: Reciprocal,
         backendName: 'cpu',
-        kernelFunc: reshape$1
+        kernelFunc: reciprocalKernelFunc,
     };
 
     /**
@@ -54372,6 +55574,228 @@
             const dataId = cpuBackend.write(output, image.shape, image.dtype);
             return { dataId, shape: image.shape, dtype: image.dtype };
         }
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const roundKernelFunc = unaryKernelFunc(Round, (xi) => {
+        // The algorithm is based on banker's rounding.
+        const base = Math.floor(xi);
+        if (xi - base < 0.5) {
+            return Math.floor(xi);
+        }
+        else if (xi - base > 0.5) {
+            return Math.ceil(xi);
+        }
+        else {
+            if (base % 2.0 === 0.0) {
+                return base;
+            }
+            else {
+                return base + 1.0;
+            }
+        }
+    });
+    const roundConfig = {
+        kernelName: Round,
+        backendName: 'cpu',
+        kernelFunc: roundKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const scaleAlpha = SELU_SCALEALPHA;
+    const scale = SELU_SCALE;
+    const seluKernelFunc = unaryKernelFunc(Selu, (xi) => {
+        if (xi >= 0) {
+            return scale * xi;
+        }
+        else {
+            return scaleAlpha * (Math.exp(xi) - 1);
+        }
+    });
+    const seluConfig = {
+        kernelName: Selu,
+        backendName: 'cpu',
+        kernelFunc: seluKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const sigmoidKernelFunc = unaryKernelFunc(Sigmoid, (xi) => 1 / (1 + Math.exp(-xi)));
+    const sigmoidConfig = {
+        kernelName: Sigmoid,
+        backendName: 'cpu',
+        kernelFunc: sigmoidKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const signKernelFunc = unaryKernelFunc(Sign, (xi) => {
+        if (xi < 0) {
+            return -1;
+        }
+        else if (xi > 0) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
+    });
+    const signConfig = {
+        kernelName: Sign,
+        backendName: 'cpu',
+        kernelFunc: signKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const sinKernelFunc = unaryKernelFunc(Sin, (xi) => Math.sin(xi));
+    const sinConfig = {
+        kernelName: Sin,
+        backendName: 'cpu',
+        kernelFunc: sinKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const sinhKernelFunc = unaryKernelFunc(Sinh, (xi) => Math.sinh(xi));
+    const sinhConfig = {
+        kernelName: Sinh,
+        backendName: 'cpu',
+        kernelFunc: sinhKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    // mirrors the implementation of tf.nn.softplus: https://goo.gl/vkcvwX
+    // epsilon is the difference between 1.0 and the next representable float.
+    // For a single precision 32 bit float this should be 2^-23, see:
+    // https://math.byu.edu/~schow/work/IEEEFloatingPoint.htm
+    const epsilon$1 = 1.1920928955078125e-7;
+    const threshold = Math.log(epsilon$1) + 2.0;
+    const softplusKernelFunc = unaryKernelFunc(Softplus, (xi) => {
+        // Value above which exp(x) may overflow, but softplus(x) == x
+        // is within machine epsilon.
+        const tooLarge = xi > -threshold;
+        // Value below which exp(x) may underflow, but softplus(x) == exp(x)
+        // is within machine epsilon.
+        const tooSmall = xi < threshold;
+        const expX = Math.exp(xi);
+        let result;
+        if (tooSmall) {
+            result = expX;
+        }
+        else if (tooLarge) {
+            result = xi;
+        }
+        else {
+            result = Math.log(1.0 + expX);
+        }
+        return result;
+    });
+    const softplusConfig = {
+        kernelName: Softplus,
+        backendName: 'cpu',
+        kernelFunc: softplusKernelFunc,
     };
 
     /**
@@ -54468,6 +55892,29 @@
 
     /**
      * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const sqrtKernelFunc = unaryKernelFunc(Sqrt, (xi) => Math.sqrt(xi));
+    const sqrtConfig = {
+        kernelName: Sqrt,
+        backendName: 'cpu',
+        kernelFunc: sqrtKernelFunc,
+    };
+
+    /**
+     * @license
      * Copyright 2019 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -54516,11 +55963,127 @@
      * limitations under the License.
      * =============================================================================
      */
-    const squaredDifferenceImpl = createBinaryKernelImpl((aVal, bVal) => {
-        const diff = aVal - bVal;
+    const squaredDifferenceImpl = createSimpleBinaryKernelImpl(((a, b) => {
+        const diff = a - b;
         return diff * diff;
+    }));
+    const squaredDifference$1 = binaryKernelFunc(SquaredDifference, squaredDifferenceImpl);
+    const squaredDifferenceConfig = {
+        kernelName: SquaredDifference,
+        backendName: 'cpu',
+        kernelFunc: squaredDifference$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const stepKernelFunc = unaryKernelFunc(Step, (xi, attrs) => {
+        const stepAttrs = attrs;
+        if (isNaN(xi)) {
+            return NaN;
+        }
+        else {
+            return xi > 0 ? 1 : stepAttrs.alpha;
+        }
     });
-    const squaredDifferenceConfig = createBinaryKernelConfig(SquaredDifference, squaredDifferenceImpl);
+    const stepConfig = {
+        kernelName: Step,
+        backendName: 'cpu',
+        kernelFunc: stepKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const tanKernelFunc = unaryKernelFunc(Tan, (xi) => Math.tan(xi));
+    const tanConfig = {
+        kernelName: Tan,
+        backendName: 'cpu',
+        kernelFunc: tanKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const tanhKernelFunc = unaryKernelFunc(Tanh, (xi) => Math.tanh(xi));
+    const tanhConfig = {
+        kernelName: Tanh,
+        backendName: 'cpu',
+        kernelFunc: tanhKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function unique$2(args) {
+        const { inputs, attrs, backend } = args;
+        const { axis } = attrs;
+        const { x } = inputs;
+        assertNotComplex(x, 'unique');
+        const values = backend.data.get(x.dataId).values;
+        const { outputValues, outputShape, indices } = uniqueImpl(values, axis, x.shape, x.dtype);
+        return [
+            backend.makeTensorInfo(outputShape, x.dtype, outputValues),
+            backend.makeTensorInfo([indices.length], 'int32', indices),
+        ];
+    }
+    const uniqueConfig = {
+        kernelName: Unique,
+        backendName: 'cpu',
+        kernelFunc: unique$2,
+    };
 
     /**
      * @license
@@ -54540,11 +56103,76 @@
      */
     // List all kernel configs here
     const kernelConfigs = [
-        cosConfig, dilation2dConfig, dilation2dBackpropInputConfig,
-        dilation2dBackpropFilterConfig, divConfig, flipLeftRightConfig,
-        identityConfig, maxPoolWithArgmaxConfig, maxConfig, nonMaxSuppressionV4Config,
-        nonMaxSuppressionV5Config, padV2Config, reshapeConfig, rotateWithOffsetConfig,
-        spaceToBatchNDConfig, squareConfig, squaredDifferenceConfig, transposeConfig
+        absConfig,
+        acosConfig,
+        acoshConfig,
+        addConfig,
+        asinConfig,
+        asinhConfig,
+        atanConfig,
+        atanhConfig,
+        avgPoolConfig,
+        avgPoolBackpropConfig,
+        batchNormConfig,
+        castConfig,
+        ceilConfig,
+        clipConfig,
+        complexConfig,
+        concatConfig,
+        cosConfig,
+        coshConfig,
+        dilation2dConfig,
+        dilation2dBackpropInputConfig,
+        dilation2dBackpropFilterConfig,
+        divConfig,
+        eluConfig,
+        erfConfig,
+        expConfig,
+        expm1Config,
+        fftConfig,
+        flipLeftRightConfig,
+        floorConfig,
+        identityConfig,
+        ifftConfig,
+        imagConfig,
+        isFiniteConfig,
+        isInfConfig,
+        isNaNConfig,
+        logConfig,
+        log1pConfig,
+        logicalNotConfig,
+        maxPoolConfig,
+        maxPoolBackpropConfig,
+        maxPoolWithArgmaxConfig,
+        maxConfig,
+        multiplyConfig,
+        nonMaxSuppressionV4Config,
+        nonMaxSuppressionV5Config,
+        notEqualConfig,
+        padV2Config,
+        realConfig,
+        reciprocalConfig,
+        reshapeConfig,
+        rotateWithOffsetConfig,
+        roundConfig,
+        rsqrtConfig,
+        seluConfig,
+        sigmoidConfig,
+        signConfig,
+        sinConfig,
+        sinhConfig,
+        sliceConfig,
+        softplusConfig,
+        spaceToBatchNDConfig,
+        sqrtConfig,
+        squareConfig,
+        squaredDifferenceConfig,
+        stepConfig,
+        subConfig,
+        tanConfig,
+        tanhConfig,
+        transposeConfig,
+        uniqueConfig,
     ];
     for (const kernelConfig of kernelConfigs) {
         registerKernel(kernelConfig);
@@ -54581,7 +56209,14 @@
     }
     function getWebGLContext(webGLVersion) {
         if (!(webGLVersion in contexts)) {
-            contexts[webGLVersion] = getWebGLRenderingContext(webGLVersion);
+            const newCtx = getWebGLRenderingContext(webGLVersion);
+            if (newCtx !== null) {
+                contexts[webGLVersion] = newCtx;
+            }
+            else {
+                console.log('Could not get context for WebGL version', webGLVersion);
+                return null;
+            }
         }
         const gl = contexts[webGLVersion];
         if (gl.isContextLost()) {
@@ -55163,6 +56798,7 @@
             }
         }
         catch (e) {
+            console.log('Error when getting WebGL context: ', e);
             return false;
         }
         return false;
@@ -55265,6 +56901,17 @@
         // tslint:disable-next-line:no-any
         const isEnabled = gl.fenceSync != null;
         return isEnabled;
+    }
+    function assertNotComplex$1(tensor, opName) {
+        if (!Array.isArray(tensor)) {
+            tensor = [tensor];
+        }
+        tensor.forEach(t => {
+            if (t != null) {
+                assert(t.dtype !== 'complex64', () => `${opName} does not support complex64 tensors ` +
+                    'in the WebGL backend.');
+            }
+        });
     }
 
     /**
@@ -55402,6 +57049,24 @@
                 `delete) or at least 0, but got ${threshold}.`);
         }
     });
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const { simpleAbsImpl: simpleAbsImplCPU, addImpl: addImplCPU, ceilImpl: ceilImplCPU, expImpl: expImplCPU, expm1Impl: expm1ImplCPU, floorImpl: floorImplCPU, logImpl: logImplCPU, maxImpl: maxImplCPU, multiplyImpl: multiplyImplCPU, rsqrtImpl: rsqrtImplCPU, sliceImpl: sliceImplCPU, subImpl: subImplCPU, transposeImpl: transposeImplCPU, uniqueImpl: uniqueImplCPU, } = shared;
 
     /**
      * @license
@@ -57293,108 +58958,6 @@ vec2 packedUVfrom3D(int texNumR, int texNumC,
 
     /**
      * @license
-     * Copyright 2017 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    class BatchNormProgram {
-        constructor(xShape, meanShape, varianceShape, offsetShape, scaleShape, varianceEpsilon) {
-            this.outputShape = [];
-            this.variableNames = ['x', 'mean', 'variance'];
-            assertAndGetBroadcastShape(xShape, meanShape);
-            assertAndGetBroadcastShape(xShape, varianceShape);
-            let offsetSnippet = '0.0';
-            if (offsetShape != null) {
-                assertAndGetBroadcastShape(xShape, offsetShape);
-                this.variableNames.push('offset');
-                offsetSnippet = 'getOffsetAtOutCoords()';
-            }
-            let scaleSnippet = '1.0';
-            if (scaleShape != null) {
-                assertAndGetBroadcastShape(xShape, scaleShape);
-                this.variableNames.push('scale');
-                scaleSnippet = 'getScaleAtOutCoords()';
-            }
-            this.outputShape = xShape;
-            this.userCode = `
-      void main() {
-        float x = getXAtOutCoords();
-        float mean = getMeanAtOutCoords();
-        float variance = getVarianceAtOutCoords();
-        float offset = ${offsetSnippet};
-        float scale = ${scaleSnippet};
-        float inv = scale * inversesqrt(variance + float(${varianceEpsilon}));
-        setOutput(dot(vec3(x, -mean, offset), vec3(inv, inv, 1)));
-      }
-    `;
-        }
-    }
-
-    /**
-     * @license
-     * Copyright 2018 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    class BatchNormPackedProgram {
-        constructor(xShape, meanShape, varianceShape, offsetShape, scaleShape, varianceEpsilon) {
-            this.packedInputs = true;
-            this.packedOutput = true;
-            this.variableNames = ['x', 'mean', 'variance'];
-            assertAndGetBroadcastShape(xShape, meanShape);
-            assertAndGetBroadcastShape(xShape, varianceShape);
-            let offsetSnippet = 'vec4(0.0)';
-            if (offsetShape != null) {
-                assertAndGetBroadcastShape(xShape, offsetShape);
-                this.variableNames.push('offset');
-                offsetSnippet = 'getOffsetAtOutCoords()';
-            }
-            let scaleSnippet = 'vec4(1.0)';
-            if (scaleShape != null) {
-                assertAndGetBroadcastShape(xShape, scaleShape);
-                this.variableNames.push('scale');
-                scaleSnippet = 'getScaleAtOutCoords()';
-            }
-            this.outputShape = xShape;
-            this.userCode = `
-      void main() {
-        vec4 offset = ${offsetSnippet};
-        vec4 scale = ${scaleSnippet};
-
-        vec4 x = getXAtOutCoords();
-        vec4 mean = getMeanAtOutCoords();
-        vec4 variance = getVarianceAtOutCoords();
-
-        vec4 inv = scale * inversesqrt(variance + vec4(${varianceEpsilon}));
-
-        setOutput((x - mean) * inv + offset);
-      }
-    `;
-        }
-    }
-
-    /**
-     * @license
      * Copyright 2018 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -57461,13 +59024,6 @@ vec2 packedUVfrom3D(int texNumR, int texNumC,
     const ADD = 'return a + b;';
     const SUB = 'return a - b;';
     const MUL = 'return a * b;';
-    // Without the equality check div produces 0.9999 for a = b, which when
-    // floored can cause errors.
-    const DIV = `
-if (a == b) {
-  return 1.0;
-};
-return a / b;`;
     // We use native integer division to deal with floating point imprecision. Since
     // we implement floor division and glsl implements truncated division, we
     // correct for this by subtracting 1 from result when the result is negative and
@@ -57509,9 +59065,6 @@ return (round(mod(b, 2.0)) != 1) ?
 `;
     const MOD = `if (b == 0.0) return NAN;
   return mod(a, b);`;
-    const ATAN2 = CHECK_NAN_SNIPPET + `
-  return atan(a, b);
-`;
     const ELU_DER = `return (b >= 1.0) ? a : a * (b + 1.0);`;
     const PRELU = `return (a < 0.) ? b * a : a;`;
     class BinaryOpProgram {
@@ -57553,27 +59106,6 @@ return (round(mod(b, 2.0)) != 1) ?
   result.g = isNaN.g > 0. ? NAN : result.g;
   result.b = isNaN.b > 0. ? NAN : result.b;
   result.a = isNaN.a > 0. ? NAN : result.a;
-`;
-    // We do the same as in ./binaryop_gpu, with vec4 and ivec4.
-    // On Linux, the vectorized implementation produces NaNs when a and b are 0.
-    const DIV$1 = `
-  // vec4 one = vec4(equal(a, b));
-  // return one + (vec4(1.0) - one) * a / b;
-  vec4 result = a / b;
-  if(a.x == b.x) {
-    result.x = 1.;
-  }
-  if(a.y == b.y) {
-    result.y = 1.;
-  }
-  if(a.z == b.z) {
-    result.z = 1.;
-  }
-  if(a.w == b.w) {
-    result.w = 1.;
-  }
-
-  return result;
 `;
     const INT_DIV$1 = `
   ivec4 ia = round(a);
@@ -57622,13 +59154,6 @@ return (round(mod(b, 2.0)) != 1) ?
     const ELU_DER$1 = `
   vec4 bGTEZero = vec4(greaterThanEqual(b, vec4(0.)));
   return (bGTEZero * a) + ((vec4(1.0) - bGTEZero) * (a * (b + vec4(1.0))));
-`;
-    const ATAN2$1 = `
-  vec4 result = atan(a, b);
-  vec4 isNaN = min(vec4(isnan(a)) + vec4(isnan(b)), vec4(1.0));
-  ` +
-        CHECK_NAN_SNIPPET$1 + `
-  return result;
 `;
     const EQUAL$1 = `
   return vec4(equal(a, b));
@@ -63796,13 +65321,6 @@ return (round(mod(b, 2.0)) != 1) ?
   }
   return result;
 `;
-    const SIN = CHECK_NAN_SNIPPET$2 + `
-  return sin(x);
-`;
-    const COS = CHECK_NAN_SNIPPET$2 + `
-  return cos(x);
-`;
-    const TAN = `return tan(x);`;
     const ASIN = CHECK_NAN_SNIPPET$2 + `
   if (abs(x) > 1.) {
     return NAN;
@@ -63853,7 +65371,6 @@ return (round(mod(b, 2.0)) != 1) ?
   float t = 1.0 / (1.0 + p * x);
   return sign * (1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*exp(-x*x));
 `;
-    const SQUARE = `return x * x;`;
     const RECIPROCAL = `return 1.0 / x;`;
     const LOGICAL_NOT = `return float(!(x >= 1.0));`;
     const TO_INT = `return float(int(x));`;
@@ -64116,8 +65633,20 @@ return (round(mod(b, 2.0)) != 1) ?
                     `Please use tf.complex(real, imag).`);
             }
             const dataId = {};
-            this.texData.set(dataId, { shape, dtype, values, usage: TextureUsage.UPLOAD });
+            this.texData.set(dataId, { shape, dtype, values, usage: TextureUsage.UPLOAD, refCount: 1 });
             return dataId;
+        }
+        /** Increase refCount of a `TextureData`. */
+        incRef(dataId) {
+            const texData = this.texData.get(dataId);
+            texData.refCount++;
+        }
+        /** Decrease refCount of a `TextureData`. */
+        decRef(dataId) {
+            if (this.texData.has(dataId)) {
+                const texData = this.texData.get(dataId);
+                texData.refCount--;
+            }
         }
         move(dataId, values, shape, dtype) {
             if (env().getBool('DEBUG')) {
@@ -64127,11 +65656,24 @@ return (round(mod(b, 2.0)) != 1) ?
                 throw new Error(`Cannot write to a complex64 dtype. ` +
                     `Please use tf.complex(real, imag).`);
             }
-            this.texData.set(dataId, { shape, dtype, values, usage: TextureUsage.UPLOAD });
+            this.texData.set(dataId, { shape, dtype, values, usage: TextureUsage.UPLOAD, refCount: 1 });
+        }
+        disposeIntermediateTensorInfo(tensorInfo) {
+            const dataId = tensorInfo.dataId;
+            if (this.texData.has(dataId)) {
+                const textureData = this.texData.get(dataId);
+                textureData.refCount--;
+                if (textureData.refCount < 1) {
+                    this.disposeData(dataId);
+                }
+            }
         }
         readSync(dataId) {
             const texData = this.texData.get(dataId);
             const { values, dtype, complexTensors, slice, shape, isPacked } = texData;
+            // The presence of `slice` indicates this tensor is a shallow slice of a
+            // different tensor, and is using that original tensor's texture. Run
+            // `clone` in order to copy that texture and read from it.
             if (slice != null) {
                 let program;
                 if (isPacked) {
@@ -64142,7 +65684,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 }
                 const res = this.runWebGLProgram(program, [{ dataId, shape, dtype }], dtype);
                 const data = this.readSync(res.dataId);
-                this.disposeData(res.dataId);
+                this.disposeIntermediateTensorInfo(res);
                 return data;
             }
             if (values != null) {
@@ -64177,6 +65719,9 @@ return (round(mod(b, 2.0)) != 1) ?
             }
             const texData = this.texData.get(dataId);
             const { values, shape, slice, dtype, complexTensors, isPacked } = texData;
+            // The presence of `slice` indicates this tensor is a shallow slice of a
+            // different tensor, and is using that original tensor's texture. Run
+            // `clone` in order to copy that texture and read from it.
             if (slice != null) {
                 let program;
                 if (isPacked) {
@@ -64187,7 +65732,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 }
                 const res = this.runWebGLProgram(program, [{ dataId, shape, dtype }], dtype);
                 const data = this.read(res.dataId);
-                this.disposeData(res.dataId);
+                this.disposeIntermediateTensorInfo(res);
                 return data;
             }
             if (values != null) {
@@ -64227,7 +65772,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 vals = this.gpgpu.downloadFloat32MatrixFromBuffer(buffer, size);
             }
             if (tmpDownloadTarget != null) {
-                this.disposeData(tmpDownloadTarget.dataId);
+                this.disposeIntermediateTensorInfo(tmpDownloadTarget);
             }
             const dTypeVals = this.convertAndCacheOnCPU(dataId, vals);
             const subscribers = this.pendingRead.get(dataId);
@@ -64266,7 +65811,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 const vals = this.gpgpu
                     .downloadMatrixFromPackedTexture(tmpData.texture, ...getDenseTexShape(shape))
                     .subarray(0, size);
-                this.disposeData(tmpTarget.dataId);
+                this.disposeIntermediateTensorInfo(tmpTarget);
                 return vals;
             }
             const shouldUsePackedProgram = env().getBool('WEBGL_PACK') && isPacked === true;
@@ -64279,7 +65824,7 @@ return (round(mod(b, 2.0)) != 1) ?
             const vals = this.gpgpu
                 .downloadByteEncodedFloatMatrixFromOutputTexture(tmpData.texture, tmpData.texShape[0], tmpData.texShape[1])
                 .subarray(0, size);
-            this.disposeData(output.dataId);
+            this.disposeIntermediateTensorInfo(output);
             return vals;
         }
         async time(f) {
@@ -64425,8 +65970,7 @@ return (round(mod(b, 2.0)) != 1) ?
          */
         shouldExecuteOnCPU(inputs, sizeThreshold = CPU_HANDOFF_SIZE_THRESHOLD) {
             const cpuBackend = this.getCPUBackend();
-            if (!this.warnedAboutCPUBackend && cpuBackend == null &&
-                !env().getBool('IS_TEST')) {
+            if (!this.warnedAboutCPUBackend && cpuBackend == null) {
                 console.warn('Your application contains ops that are small enough to be ' +
                     'executed on the CPU backend, however the CPU backend cannot ' +
                     'be found. Consider importing the CPU backend ' +
@@ -64462,7 +66006,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         slice(x, begin, size) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.slice(x, begin, size);
+                const outValues = sliceImplCPU(this.texData.get(x.dataId).values, begin, size, x.shape, x.dtype);
+                return this.makeOutput(size, x.dtype, outValues);
             }
             // Short-circuit computation if the slice is zero-sized.
             if (sizeFromShape(size) === 0) {
@@ -64505,8 +66050,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return t;
         }
         stridedSlice(x, begin, end, strides) {
-            if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.stridedSlice(x, begin, end, strides);
+            const cpuRes = this.tryRunOnCpuOrThrow([x], () => this.cpuBackend.stridedSlice(x, begin, end, strides));
+            if (cpuRes) {
+                return cpuRes;
             }
             const outShape = computeOutShape(begin, end, strides);
             if (outShape.some(axis => axis === 0)) {
@@ -64526,9 +66072,6 @@ return (round(mod(b, 2.0)) != 1) ?
                 const reals = tensors.map((t) => real(t));
                 const imags = tensors.map((t) => imag(t));
                 return complex(this.concat(reals, axis), this.concat(imags, axis));
-            }
-            if (this.shouldExecuteOnCPU(tensors)) {
-                return this.cpuBackend.concat(tensors, axis);
             }
             if (tensors.length === 1) {
                 return tensors[0];
@@ -64557,8 +66100,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return res.reshape(outShape);
         }
         neg(x) {
-            if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.neg(x);
+            const cpuRes = this.tryRunOnCpuOrThrow([x], () => this.cpuBackend.neg(x));
+            if (cpuRes) {
+                return cpuRes;
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, NEG, x.dtype);
@@ -64627,33 +66171,18 @@ return (round(mod(b, 2.0)) != 1) ?
                 imag.dispose();
                 return complex;
             }
+            const dtype = upcastType(a.dtype, b.dtype);
             if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.multiply(a, b);
+                const aData = this.texData.get(a.dataId);
+                const bData = this.texData.get(b.dataId);
+                const [outValues, outShape] = multiplyImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
+                return this.makeOutput(outShape, dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
                 return this.packedBinaryOp(a, b, MUL, a.dtype);
             }
             const program = new BinaryOpProgram(MUL, a.shape, b.shape);
             return this.compileAndRun(program, [a, b], a.dtype);
-        }
-        batchNorm(x, mean, variance, offset, scale, varianceEpsilon) {
-            const inputs = [x, mean, variance];
-            let offsetShape = null;
-            if (offset != null) {
-                offsetShape = offset.shape;
-                inputs.push(offset);
-            }
-            let scaleShape = null;
-            if (scale != null) {
-                scaleShape = scale.shape;
-                inputs.push(scale);
-            }
-            if (env().getBool('WEBGL_PACK_NORMALIZATION')) {
-                const batchNormPackedProgram = new BatchNormPackedProgram(x.shape, mean.shape, variance.shape, offsetShape, scaleShape, varianceEpsilon);
-                return this.compileAndRun(batchNormPackedProgram, inputs);
-            }
-            const batchNormProgram = new BatchNormProgram(x.shape, mean.shape, variance.shape, offsetShape, scaleShape, varianceEpsilon);
-            return this.compileAndRun(batchNormProgram, inputs);
         }
         localResponseNormalization4D(x, radius, bias, alpha, beta) {
             const program = env().getBool('WEBGL_PACK_NORMALIZATION') ?
@@ -64682,8 +66211,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.compileAndRun(program, [x]);
         }
         gather(x, indices, axis) {
-            if (this.shouldExecuteOnCPU([x, indices])) {
-                return this.cpuBackend.gather(x, indices, axis);
+            const cpuRes = this.tryRunOnCpuOrThrow([x, indices], () => this.cpuBackend.gather(x, indices, axis));
+            if (cpuRes) {
+                return cpuRes;
             }
             const program = new GatherProgram(x.shape, indices.size, axis);
             return this.compileAndRun(program, [x, indices]);
@@ -64778,8 +66308,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.reduce(a2D, 'sum', outputDType).reshape(outShape);
         }
         prod(x, axes) {
-            if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.prod(x, axes);
+            const cpuRes = this.tryRunOnCpuOrThrow([x], () => this.cpuBackend.prod(x, axes));
+            if (cpuRes) {
+                return cpuRes;
             }
             const [outShape, reduceShape] = computeOutAndReduceShapes(x.shape, axes);
             const inSize = sizeFromShape(reduceShape);
@@ -64879,8 +66410,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.compileAndRun(program, [a, b], 'bool');
         }
         less(a, b) {
-            if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.less(a, b);
+            const cpuRes = this.tryRunOnCpuOrThrow([a, b], () => this.cpuBackend.less(a, b));
+            if (cpuRes) {
+                return cpuRes;
             }
             if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
                 return this.packedBinaryOp(a, b, LESS$1, 'bool');
@@ -64896,8 +66428,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.compileAndRun(program, [a, b], 'bool');
         }
         greater(a, b) {
-            if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.greater(a, b);
+            const cpuRes = this.tryRunOnCpuOrThrow([a, b], () => this.cpuBackend.greater(a, b));
+            if (cpuRes) {
+                return cpuRes;
             }
             if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
                 return this.packedBinaryOp(a, b, GREATER$1, 'bool');
@@ -64952,8 +66485,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.reduce(a2D, 'min', a2D.dtype).reshape(outShape);
         }
         minimum(a, b) {
-            if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.minimum(a, b);
+            const cpuRes = this.tryRunOnCpuOrThrow([a, b], () => this.cpuBackend.minimum(a, b));
+            if (cpuRes) {
+                return cpuRes;
             }
             const program = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') ?
                 new BinaryOpPackedProgram(MIN$1, a.shape, b.shape) :
@@ -64967,8 +66501,9 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.compileAndRun(program, [a, b]);
         }
         maximum(a, b) {
-            if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.maximum(a, b);
+            const cpuRes = this.tryRunOnCpuOrThrow([a, b], () => this.cpuBackend.maximum(a, b));
+            if (cpuRes) {
+                return cpuRes;
             }
             const program = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') ?
                 new BinaryOpPackedProgram(MAX$1, a.shape, b.shape) :
@@ -65002,10 +66537,13 @@ return (round(mod(b, 2.0)) != 1) ?
             if (a.dtype === 'complex64' && b.dtype === 'complex64') {
                 return this.complexSeparableBinaryOp(a, b, ADD);
             }
-            if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.add(a, b);
-            }
             const dtype = upcastType(a.dtype, b.dtype);
+            if (this.shouldExecuteOnCPU([a, b])) {
+                const aData = this.texData.get(a.dataId);
+                const bData = this.texData.get(b.dataId);
+                const [outValues, outShape] = addImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
+                return this.makeOutput(outShape, dtype, outValues);
+            }
             if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
                 return this.packedBinaryOp(a, b, ADD, dtype);
             }
@@ -65076,10 +66614,13 @@ return (round(mod(b, 2.0)) != 1) ?
             if (a.dtype === 'complex64' && b.dtype === 'complex64') {
                 return this.complexSeparableBinaryOp(a, b, SUB);
             }
-            if (this.shouldExecuteOnCPU([a, b])) {
-                return this.cpuBackend.subtract(a, b);
-            }
             const dtype = upcastType(a.dtype, b.dtype);
+            if (this.shouldExecuteOnCPU([a, b])) {
+                const aData = this.texData.get(a.dataId);
+                const bData = this.texData.get(b.dataId);
+                const [outValues, outShape] = subImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
+                return this.makeOutput(outShape, dtype, outValues);
+            }
             if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
                 return this.packedBinaryOp(a, b, SUB, a.dtype);
             }
@@ -65096,7 +66637,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         ceil(x) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.ceil(x);
+                const outValues = ceilImplCPU(this.texData.get(x.dataId).values, x.dtype);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, CEIL, x.dtype);
@@ -65106,7 +66648,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         floor(x) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.floor(x);
+                const outValues = floorImplCPU(this.texData.get(x.dataId).values, x.dtype);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, FLOOR, x.dtype);
@@ -65136,7 +66679,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         exp(x) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.exp(x);
+                const outValues = expImplCPU(this.texData.get(x.dataId).values, x.dtype);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, EXP, x.dtype);
@@ -65146,7 +66690,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         expm1(x) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.expm1(x);
+                const outValues = expm1ImplCPU(this.texData.get(x.dataId).values, x.dtype);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, EXPM1, x.dtype);
@@ -65169,7 +66714,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         log(x) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.log(x);
+                const outValues = logImplCPU(this.texData.get(x.dataId).values, x.dtype);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, LOG$1, x.dtype);
@@ -65187,7 +66733,8 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         rsqrt(x) {
             if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.rsqrt(x);
+                const outValues = rsqrtImplCPU(this.texData.get(x.dataId).values, x.dtype);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             const program = new UnaryOpProgram(x.shape, RSQRT);
             return this.compileAndRun(program, [x]);
@@ -65255,8 +66802,10 @@ return (round(mod(b, 2.0)) != 1) ?
             return this.compileAndRun(program, [x], null, customSetup);
         }
         abs(x) {
-            if (this.shouldExecuteOnCPU([x])) {
-                return this.cpuBackend.abs(x);
+            // TODO: handle cases when x is complex.
+            if (this.shouldExecuteOnCPU([x]) && x.dtype !== 'complex64') {
+                const outValues = simpleAbsImplCPU(this.texData.get(x.dataId).values);
+                return this.makeOutput(x.shape, x.dtype, outValues);
             }
             if (env().getBool('WEBGL_PACK_UNARY_OPERATIONS')) {
                 return this.packedUnaryOp(x, ABS, x.dtype);
@@ -65281,18 +66830,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new UnaryOpProgram(x.shape, SOFTPLUS);
             return this.compileAndRun(program, [x]);
         }
-        sin(x) {
-            const program = new UnaryOpProgram(x.shape, SIN);
-            return this.compileAndRun(program, [x]);
-        }
-        cos(x) {
-            const program = new UnaryOpProgram(x.shape, COS);
-            return this.compileAndRun(program, [x]);
-        }
-        tan(x) {
-            const program = new UnaryOpProgram(x.shape, TAN);
-            return this.compileAndRun(program, [x]);
-        }
         asin(x) {
             const program = new UnaryOpProgram(x.shape, ASIN);
             return this.compileAndRun(program, [x]);
@@ -65304,12 +66841,6 @@ return (round(mod(b, 2.0)) != 1) ?
         atan(x) {
             const program = new UnaryOpProgram(x.shape, ATAN);
             return this.compileAndRun(program, [x]);
-        }
-        atan2(a, b) {
-            const program = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') ?
-                new BinaryOpPackedProgram(ATAN2$1, a.shape, b.shape) :
-                new BinaryOpProgram(ATAN2, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b]);
         }
         sinh(x) {
             const program = new UnaryOpProgram(x.shape, SINH);
@@ -65364,9 +66895,9 @@ return (round(mod(b, 2.0)) != 1) ?
                 !reshapeWillBeExpensive) {
                 const targetShape = isChannelsLast ? xShape[0] * xShape[1] * xShape[2] :
                     xShape[0] * xShape[2] * xShape[3];
-                const xReshaped = this.reshape(x, [1, targetShape, convInfo.inChannels]);
-                const filterReshaped = this.reshape(filter, [1, convInfo.inChannels, convInfo.outChannels]);
-                return this.reshape(this.fusedBatchMatMul({
+                const xReshaped = reshape(x, [1, targetShape, convInfo.inChannels]);
+                const filterReshaped = reshape(filter, [1, convInfo.inChannels, convInfo.outChannels]);
+                const result = this.fusedBatchMatMul({
                     a: xReshaped,
                     b: filterReshaped,
                     transposeA,
@@ -65374,7 +66905,8 @@ return (round(mod(b, 2.0)) != 1) ?
                     bias,
                     activation,
                     preluActivationWeights
-                }), convInfo.outShape);
+                });
+                return reshape(result, convInfo.outShape);
             }
             // Following optimization is specific to packed |x| with odd row count
             // (For example, in channelLast mode, 'row count' refers to x.shape[2]):
@@ -65404,7 +66936,7 @@ return (round(mod(b, 2.0)) != 1) ?
             xTexData.shape = xTexData.shape.slice();
             xTexData.shape[xTexData.shape.length - 2]++;
             assert(isReshapeFree(xTexData.shape, xReshaped.shape), () => `packed reshape ${xTexData.shape} to ${xReshaped.shape} isn't free`);
-            const filterReshaped = this.reshape(filter, [1, convInfo.inChannels, convInfo.outChannels]);
+            const filterReshaped = reshape(filter, [1, convInfo.inChannels, convInfo.outChannels]);
             const pointwiseConv = this.fusedBatchMatMul({
                 a: xReshaped,
                 b: filterReshaped,
@@ -65563,27 +67095,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new Conv3DDerFilterProgram(convInfo);
             return this.compileAndRun(program, [x, dy]);
         }
-        maxPool(x, convInfo) {
-            const program = new Pool2DProgram(convInfo, 'max', false);
-            return this.compileAndRun(program, [x]);
-        }
-        avgPool(x, convInfo) {
-            const program = new Pool2DProgram(convInfo, 'avg', false);
-            return this.compileAndRun(program, [x], 'float32');
-        }
-        maxPoolBackprop(dy, x, y, convInfo) {
-            const getPositions = true;
-            const maxPoolPositionsProgram = new Pool2DProgram(convInfo, 'max', getPositions);
-            const maxPoolPositions = this.compileAndRun(maxPoolPositionsProgram, [x]);
-            const maxPoolBackPropProgram = new MaxPool2DBackpropProgram(convInfo);
-            const result = this.compileAndRun(maxPoolBackPropProgram, [dy, maxPoolPositions], x.dtype);
-            maxPoolPositions.dispose();
-            return result;
-        }
-        avgPoolBackprop(dy, x, convInfo) {
-            const avgPoolBackpropProgram = new AvgPool2DBackpropProgram(convInfo);
-            return this.compileAndRun(avgPoolBackpropProgram, [dy], x.dtype);
-        }
         cast(x, dtype) {
             return castTensor(x, dtype, this);
         }
@@ -65626,16 +67137,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const result = this.compileAndRun(maxPool3dBackPropProgram, [dy, maxPool3dPositions], x.dtype);
             maxPool3dPositions.dispose();
             return result;
-        }
-        reshape(x, shape) {
-            const texData = this.texData.get(x.dataId);
-            if (texData.isPacked && !isReshapeFree(x.shape, shape) &&
-                !(texData.texture !== null &&
-                    isReshapeFree(texData.shape, shape))) {
-                const info = this.packedReshape(x, shape);
-                return engine().makeTensorFromDataId(info.dataId, info.shape, info.dtype);
-            }
-            return reshapeTensor(x, shape);
         }
         resizeBilinear(x, newHeight, newWidth, alignCorners) {
             const program = env().getBool('WEBGL_PACK_IMAGE_OPERATIONS') ?
@@ -65777,13 +67278,13 @@ return (round(mod(b, 2.0)) != 1) ?
             // TODO: Use CPU implementation due to the precision problem in Safari.
             return linspaceImpl(start, stop, num);
         }
-        makeTensorInfo(shape, dtype) {
-            const dataId = this.write(null /* values */, shape, dtype);
+        makeTensorInfo(shape, dtype, values) {
+            const dataId = this.write(values, shape, dtype);
             this.texData.get(dataId).usage = null;
             return { dataId, shape, dtype };
         }
-        makeOutput(shape, dtype) {
-            const { dataId } = this.makeTensorInfo(shape, dtype);
+        makeOutput(shape, dtype, values) {
+            const { dataId } = this.makeTensorInfo(shape, dtype, values);
             return engine().makeTensorFromDataId(dataId, shape, dtype, this);
         }
         unpackTensor(input) {
@@ -65920,7 +67421,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 query = this.startTimer();
             }
             runProgram(this.gpgpu, binary, inputsData, outputData, customSetup);
-            dataToDispose.forEach(info => this.disposeData(info.dataId));
+            dataToDispose.forEach(info => this.disposeIntermediateTensorInfo(info));
             if (shouldTimeProgram) {
                 query = this.endTimer(query);
                 this.activeTimers.push({ name: program.constructor.name, query: this.getQueryTime(query) });
@@ -65928,7 +67429,7 @@ return (round(mod(b, 2.0)) != 1) ?
             if (!env().getBool('WEBGL_LAZILY_UNPACK') && outData.isPacked &&
                 preventEagerUnpackingOfOutput === false) {
                 const unpacked = this.unpackTensor(output);
-                this.disposeData(output.dataId);
+                this.disposeIntermediateTensorInfo(output);
                 return unpacked;
             }
             return output;
@@ -66048,7 +67549,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 texData.texShape = outputTexData.texShape;
                 texData.isPacked = outputTexData.isPacked;
                 texData.usage = outputTexData.usage;
-                this.disposeData(tempDenseInputHandle.dataId);
+                this.disposeIntermediateTensorInfo(tempDenseInputHandle);
                 this.texData.delete(encodedOutputTarget.dataId);
                 // Once uploaded, don't store the values on cpu.
                 texData.values = null;
@@ -66083,6 +67584,19 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         computeBytes(shape, dtype) {
             return shape[0] * shape[1] * bytesPerElement(dtype);
+        }
+        tryRunOnCpuOrThrow(inputs, fn) {
+            if (this.shouldExecuteOnCPU(inputs)) {
+                try {
+                    return fn();
+                }
+                catch (e) {
+                    if (env().getBool('IS_TEST')) {
+                        throw new Error('CPU forwarding failed');
+                    }
+                }
+            }
+            return null;
         }
     }
     function float32ToTypedArray(a, dtype) {
@@ -66122,29 +67636,51 @@ return (round(mod(b, 2.0)) != 1) ?
         registerBackend('webgl', () => new MathBackendWebGL(), 2 /* priority */);
     }
 
+    const CHECK_NAN_SNIPPET_UNARY = `if (isnan(x)) return x;`;
+    const CHECK_NAN_SNIPPET_BINARY = `
+  if (isnan(a)) return a;
+  if (isnan(b)) return b;
+`;
+    const CHECK_NAN_SNIPPET_BINARY_PACKED = `
+  result.r = isNaN.r > 0. ? NAN : result.r;
+  result.g = isNaN.g > 0. ? NAN : result.g;
+  result.b = isNaN.b > 0. ? NAN : result.b;
+  result.a = isNaN.a > 0. ? NAN : result.a;
+`;
     /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
+     * Template that creates a `KernelFunc` for unary ops.
+     * @param opSnippets Op snippet to create `UnaryOpProgram`.
      */
-    function divImpl$1(a, b, backend) {
-        let program = new BinaryOpProgram(DIV, a.shape, b.shape);
-        if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
-            program = new BinaryOpPackedProgram(DIV$1, a.shape, b.shape, true);
-        }
-        const output = backend.runWebGLProgram(program, [a, b], 'float32');
-        return output;
+    function unaryKernelFunc$1(opSnippet) {
+        return ({ inputs, backend }) => {
+            const { x } = inputs;
+            const webglBackend = backend;
+            const program = new UnaryOpProgram(x.shape, opSnippet);
+            return webglBackend.runWebGLProgram(program, [x], x.dtype);
+        };
+    }
+    /**
+     * Template that creates a `KernelFunc` for binary ops.
+     * @param opSnippet Op snippet to create `BinaryOpProgram`.
+     * @param packedOpSnippet Op snippet to create `BinaryOpPackedProgram`.
+     * @param checkOutOfBoundsForPackedProgram Whether to set checkOutOfBounds=true
+     *     when creating BinaryOpPackedProgram.
+     * @param dtype Optional. If set, the result has this dtype. Otherwise, the
+     *     result has the same dtype as the first input. This is mainly used in
+     *     comparison kernels, such as Equal, Less, Greater, etc.
+     */
+    function binaryKernelFunc$1(opSnippet, packedOpSnippet, checkOutOfBoundsForPackedProgram, dtype) {
+        // TODO(jingjin): handle complex64.
+        return ({ inputs, backend }) => {
+            const { a, b } = inputs;
+            const webglBackend = backend;
+            const program = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') ?
+                new BinaryOpPackedProgram(packedOpSnippet, a.shape, b.shape, !!checkOutOfBoundsForPackedProgram) :
+                new BinaryOpProgram(opSnippet, a.shape, b.shape);
+            const $dtype = dtype || a.dtype;
+            const output = webglBackend.runWebGLProgram(program, [a, b], $dtype);
+            return output;
+        };
     }
 
     /**
@@ -66163,14 +67699,349 @@ return (round(mod(b, 2.0)) != 1) ?
      * limitations under the License.
      * =============================================================================
      */
+    const ATAN2 = CHECK_NAN_SNIPPET_BINARY + `
+  return atan(a, b);
+`;
+    const ATAN2_PACKED = `
+  vec4 result = atan(a, b);
+  vec4 isNaN = min(vec4(isnan(a)) + vec4(isnan(b)), vec4(1.0));
+  ` +
+        CHECK_NAN_SNIPPET_BINARY_PACKED + `
+  return result;
+`;
+    const atan2KernelFunc = binaryKernelFunc$1(ATAN2, ATAN2_PACKED);
+    const atan2Config = {
+        kernelName: Atan2,
+        backendName: 'webgl',
+        kernelFunc: atan2KernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function identity$1(args) {
+        const { inputs, backend } = args;
+        const { x } = inputs;
+        backend.incRef(x.dataId);
+        return { dataId: x.dataId, shape: x.shape, dtype: x.dtype };
+    }
+    const identityConfig$1 = {
+        kernelName: Identity,
+        backendName: 'webgl',
+        kernelFunc: identity$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function avgPool$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        assertNotComplex$1(x, 'avgPool');
+        const { filterSize, strides, pad, dimRoundingMode } = attrs;
+        const dilations = 1;
+        assert(eitherStridesOrDilationsAreOne(strides, dilations), () => 'Error in avgPool: Either strides or dilations must be 1. ' +
+            `Got strides ${strides} and dilations '${dilations}'`);
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, dilations, pad, dimRoundingMode);
+        if (convInfo.filterWidth === 1 && convInfo.filterHeight === 1 &&
+            arraysEqual(convInfo.inShape, convInfo.outShape)) {
+            return identity$1({ inputs: { x }, backend });
+        }
+        const avgPoolProgram = new Pool2DProgram(convInfo, 'avg', false);
+        return backend.runWebGLProgram(avgPoolProgram, [x], 'float32');
+    }
+    const avgPoolConfig$1 = {
+        kernelName: AvgPool,
+        backendName: 'webgl',
+        kernelFunc: avgPool$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function avgPoolBackprop$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, input } = inputs;
+        const x = input;
+        assertNotComplex$1([dy, input], 'avgPoolBackprop');
+        const { filterSize, strides, pad } = attrs;
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, 1 /* dilations */, pad);
+        const avgPoolBackpropProgram = new AvgPool2DBackpropProgram(convInfo);
+        return backend.runWebGLProgram(avgPoolBackpropProgram, [dy], x.dtype);
+    }
+    const avgPoolBackpropConfig$1 = {
+        kernelName: AvgPoolBackprop,
+        backendName: 'webgl',
+        kernelFunc: avgPoolBackprop$2
+    };
+
+    /**
+     * @license
+     * Copyright 2017 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class BatchNormProgram {
+        constructor(xShape, meanShape, varianceShape, offsetShape, scaleShape, varianceEpsilon) {
+            this.outputShape = [];
+            this.variableNames = ['x', 'mean', 'variance'];
+            assertAndGetBroadcastShape(xShape, meanShape);
+            assertAndGetBroadcastShape(xShape, varianceShape);
+            let offsetSnippet = '0.0';
+            if (offsetShape != null) {
+                assertAndGetBroadcastShape(xShape, offsetShape);
+                this.variableNames.push('offset');
+                offsetSnippet = 'getOffsetAtOutCoords()';
+            }
+            let scaleSnippet = '1.0';
+            if (scaleShape != null) {
+                assertAndGetBroadcastShape(xShape, scaleShape);
+                this.variableNames.push('scale');
+                scaleSnippet = 'getScaleAtOutCoords()';
+            }
+            this.outputShape = xShape;
+            this.userCode = `
+      void main() {
+        float x = getXAtOutCoords();
+        float mean = getMeanAtOutCoords();
+        float variance = getVarianceAtOutCoords();
+        float offset = ${offsetSnippet};
+        float scale = ${scaleSnippet};
+        float inv = scale * inversesqrt(variance + float(${varianceEpsilon}));
+        setOutput(dot(vec3(x, -mean, offset), vec3(inv, inv, 1)));
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2018 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class BatchNormPackedProgram {
+        constructor(xShape, meanShape, varianceShape, offsetShape, scaleShape, varianceEpsilon) {
+            this.packedInputs = true;
+            this.packedOutput = true;
+            this.variableNames = ['x', 'mean', 'variance'];
+            assertAndGetBroadcastShape(xShape, meanShape);
+            assertAndGetBroadcastShape(xShape, varianceShape);
+            let offsetSnippet = 'vec4(0.0)';
+            if (offsetShape != null) {
+                assertAndGetBroadcastShape(xShape, offsetShape);
+                this.variableNames.push('offset');
+                offsetSnippet = 'getOffsetAtOutCoords()';
+            }
+            let scaleSnippet = 'vec4(1.0)';
+            if (scaleShape != null) {
+                assertAndGetBroadcastShape(xShape, scaleShape);
+                this.variableNames.push('scale');
+                scaleSnippet = 'getScaleAtOutCoords()';
+            }
+            this.outputShape = xShape;
+            this.userCode = `
+      void main() {
+        vec4 offset = ${offsetSnippet};
+        vec4 scale = ${scaleSnippet};
+
+        vec4 x = getXAtOutCoords();
+        vec4 mean = getMeanAtOutCoords();
+        vec4 variance = getVarianceAtOutCoords();
+
+        vec4 inv = scale * inversesqrt(variance + vec4(${varianceEpsilon}));
+
+        setOutput((x - mean) * inv + offset);
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const batchNormKernelFunc$1 = ({ inputs, backend, attrs }) => {
+        const { x, mean, variance, offset, scale } = inputs;
+        assert(mean.shape.length === variance.shape.length, () => 'Batch normalization gradient requires mean and variance to have ' +
+            'equal ranks.');
+        assert(offset == null || mean.shape.length === offset.shape.length, () => 'Batch normalization gradient requires mean and offset to have ' +
+            'equal ranks.');
+        assert(scale == null || mean.shape.length === scale.shape.length, () => 'Batch normalization gradient requires mean and scale to have ' +
+            'equal ranks.');
+        let { varianceEpsilon } = attrs;
+        if (varianceEpsilon == null) {
+            varianceEpsilon = 0.001;
+        }
+        const finalInputs = [x, mean, variance];
+        let offsetShape = null;
+        if (offset != null) {
+            offsetShape = offset.shape;
+            finalInputs.push(offset);
+        }
+        let scaleShape = null;
+        if (scale != null) {
+            scaleShape = scale.shape;
+            finalInputs.push(scale);
+        }
+        const program = env().getBool('WEBGL_PACK_NORMALIZATION') ?
+            new BatchNormPackedProgram(x.shape, mean.shape, variance.shape, offsetShape, scaleShape, varianceEpsilon) :
+            new BatchNormProgram(x.shape, mean.shape, variance.shape, offsetShape, scaleShape, varianceEpsilon);
+        const output = backend.runWebGLProgram(program, finalInputs, finalInputs[0].dtype);
+        return output;
+    };
+    const batchNormConfig$1 = {
+        kernelName: FusedBatchNorm,
+        backendName: 'webgl',
+        kernelFunc: batchNormKernelFunc$1,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const COS = CHECK_NAN_SNIPPET_UNARY + `
+  return cos(x);
+`;
+    const cosKernelFunc$1 = unaryKernelFunc$1(COS);
+    const cosConfig$1 = {
+        kernelName: Cos,
+        backendName: 'webgl',
+        kernelFunc: cosKernelFunc$1,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    // Without the equality check div produces 0.9999 for a = b, which when
+    // floored can cause errors.
+    const DIV = `
+if (a == b) {
+  return 1.0;
+};
+return a / b;`;
+    // We do the same as in ./binaryop_gpu, with vec4 and ivec4.
+    // On Linux, the vectorized implementation produces NaNs when a and b are 0.
+    const DIV_PACKED = `
+  // vec4 one = vec4(equal(a, b));
+  // return one + (vec4(1.0) - one) * a / b;
+  vec4 result = a / b;
+  if(a.x == b.x) {
+    result.x = 1.;
+  }
+  if(a.y == b.y) {
+    result.y = 1.;
+  }
+  if(a.z == b.z) {
+    result.z = 1.;
+  }
+  if(a.w == b.w) {
+    result.w = 1.;
+  }
+
+  return result;
+`;
+    const divKernelFunc = binaryKernelFunc$1(DIV, DIV_PACKED, true /* checkOutOfBoundsForPackedProgram */);
     const divConfig$1 = {
         kernelName: Div,
         backendName: 'webgl',
-        kernelFunc: ({ inputs, backend }) => {
-            const { a, b } = inputs;
-            const webglBackend = backend;
-            return divImpl$1(a, b, webglBackend);
-        }
+        kernelFunc: divKernelFunc,
     };
 
     /**
@@ -66426,24 +68297,6 @@ return (round(mod(b, 2.0)) != 1) ?
      * limitations under the License.
      * =============================================================================
      */
-    const { maxImpl: maxImplCPU, transposeImpl: transposeImplCPU } = shared;
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
     // Returns an array of configuration objects that describe each stage of the
     // reduction.
     function getReductionStages(inShape) {
@@ -66505,15 +68358,47 @@ return (round(mod(b, 2.0)) != 1) ?
         const output = backend.runWebGLProgram(program, [input3D], input.dtype, null /* customSetup */, preventEagerUnpackingOfOutput);
         return { dataId: output.dataId, shape: afterShape, dtype: output.dtype };
     }
-    function reshape$2(x, afterShape, backend) {
-        const xTexData = backend.texData.get(x.dataId);
-        if (xTexData.isPacked && !isReshapeFree(x.shape, afterShape) &&
-            !(xTexData.texture !== null &&
-                isReshapeFree(xTexData.shape, afterShape))) {
-            return packedReshape(x, afterShape, backend);
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function reshape$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { shape } = attrs;
+        const webglBackend = backend;
+        const xSize = sizeFromShape(x.shape);
+        const $shape = inferFromImplicitShape(shape, xSize);
+        const $xSize = sizeFromShape($shape);
+        assert(xSize === $xSize, () => `The new shape (${$shape}) has ${$xSize} elements and the old ` +
+            `shape (${x.shape}) has ${xSize} elements. The new shape and old ` +
+            `shape must have the same number of elements.`);
+        const xTexData = webglBackend.texData.get(x.dataId);
+        if (xTexData.isPacked && !isReshapeFree(x.shape, $shape) &&
+            !(xTexData.texture !== null && isReshapeFree(xTexData.shape, $shape))) {
+            return packedReshape(x, $shape, webglBackend);
         }
-        return { dataId: x.dataId, shape: afterShape, dtype: x.dtype };
+        webglBackend.incRef(x.dataId);
+        return { dataId: x.dataId, shape: $shape, dtype: x.dtype };
     }
+    const reshapeConfig$1 = {
+        kernelName: Reshape,
+        backendName: 'webgl',
+        kernelFunc: reshape$2
+    };
 
     /**
      * @license
@@ -66535,13 +68420,12 @@ return (round(mod(b, 2.0)) != 1) ?
         const inSize = sizeFromShape(reduceShape);
         const xSize = sizeFromShape(x.shape);
         const batchSize = xSize / inSize;
-        const reshapedInput = reshape$2(x, [batchSize, inSize], backend);
+        const reshapedInput = reshape$2({ inputs: { x }, attrs: { shape: [batchSize, inSize] }, backend });
         const reduced = reduce(reshapedInput, x.dtype, 'max', backend);
-        if (reshapedInput.dataId !== x.dataId) {
-            // dispose the output of the packed reshape.
-            backend.disposeData(reshapedInput.dataId);
-        }
-        return reshape$2(reduced, outShape, backend);
+        const reshapedOutput = reshape$2({ inputs: { x: reduced }, attrs: { shape: outShape }, backend });
+        backend.disposeIntermediateTensorInfo(reshapedInput);
+        backend.disposeIntermediateTensorInfo(reduced);
+        return reshapedOutput;
     }
 
     /**
@@ -66743,10 +68627,85 @@ return (round(mod(b, 2.0)) != 1) ?
                 out = maxImpl$1(maxInput, reduceShape, outShape, webglBackend);
             }
             if (maxInputIsTransposed) {
-                webglBackend.disposeData(maxInput.dataId);
+                webglBackend.disposeIntermediateTensorInfo(maxInput);
             }
             return out;
         }
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function maxPool$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        assertNotComplex$1(x, 'maxPool');
+        const { filterSize, strides, pad, dimRoundingMode } = attrs;
+        const dilations = 1;
+        assert(eitherStridesOrDilationsAreOne(strides, dilations), () => 'Error in maxPool: Either strides or dilations must be 1. ' +
+            `Got strides ${strides} and dilations '${dilations}'`);
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, dilations, pad, dimRoundingMode);
+        if (convInfo.filterWidth === 1 && convInfo.filterHeight === 1 &&
+            arraysEqual(convInfo.inShape, convInfo.outShape)) {
+            return identity$1({ inputs: { x }, backend });
+        }
+        const maxPoolProgram = new Pool2DProgram(convInfo, 'max', false);
+        return backend.runWebGLProgram(maxPoolProgram, [x], x.dtype);
+    }
+    const maxPoolConfig$1 = {
+        kernelName: MaxPool,
+        backendName: 'webgl',
+        kernelFunc: maxPool$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function maxPoolBackprop$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, input, output } = inputs;
+        const x = input;
+        assertNotComplex$1([input, output], 'maxPoolBackprop');
+        const { filterSize, strides, pad, dimRoundingMode } = attrs;
+        const convInfo = computePool2DInfo(x.shape, filterSize, strides, 1 /* dilations */, pad, dimRoundingMode);
+        const getPositions = true;
+        const maxPoolPositionsProgram = new Pool2DProgram(convInfo, 'max', getPositions);
+        const maxPoolPositions = backend.runWebGLProgram(maxPoolPositionsProgram, [x], x.dtype);
+        const maxPoolBackPropProgram = new MaxPool2DBackpropProgram(convInfo);
+        const result = backend.runWebGLProgram(maxPoolBackPropProgram, [dy, maxPoolPositions], x.dtype);
+        backend.disposeIntermediateTensorInfo(maxPoolPositions);
+        return result;
+    }
+    const maxPoolBackpropConfig$1 = {
+        kernelName: MaxPoolBackprop,
+        backendName: 'webgl',
+        kernelFunc: maxPoolBackprop$2
     };
 
     /**
@@ -66997,6 +68956,32 @@ return (round(mod(b, 2.0)) != 1) ?
 
     /**
      * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const SIN = CHECK_NAN_SNIPPET_UNARY + `
+  return sin(x);
+`;
+    const sinKernelFunc$1 = unaryKernelFunc$1(SIN);
+    const sinConfig$1 = {
+        kernelName: Sin,
+        backendName: 'webgl',
+        kernelFunc: sinKernelFunc$1,
+    };
+
+    /**
+     * @license
      * Copyright 2019 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -67011,15 +68996,12 @@ return (round(mod(b, 2.0)) != 1) ?
      * limitations under the License.
      * =============================================================================
      */
+    const SQUARE = `return x * x;`;
+    const squareKernelFunc = unaryKernelFunc$1(SQUARE);
     const squareConfig$1 = {
         kernelName: Square,
         backendName: 'webgl',
-        kernelFunc: ({ inputs, backend }) => {
-            const { x } = inputs;
-            const webglBackend = backend;
-            const program = new UnaryOpProgram(x.shape, SQUARE);
-            return webglBackend.runWebGLProgram(program, [x], x.dtype);
-        }
+        kernelFunc: squareKernelFunc,
     };
 
     /**
@@ -67038,18 +69020,36 @@ return (round(mod(b, 2.0)) != 1) ?
      * limitations under the License.
      * =============================================================================
      */
+    const SQUARED_DIFFERENCE = 'return (a - b) * (a - b);';
+    const squaredDifferenceKernelFunc = binaryKernelFunc$1(SQUARED_DIFFERENCE, SQUARED_DIFFERENCE);
     const squaredDifferenceConfig$1 = {
         kernelName: SquaredDifference,
         backendName: 'webgl',
-        kernelFunc: ({ inputs, backend }) => {
-            const { a, b } = inputs;
-            const SQUARED_DIFFERENCE = 'return (a - b) * (a - b);';
-            const webGLBackend = backend;
-            const program = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') ?
-                new BinaryOpPackedProgram(SQUARED_DIFFERENCE, a.shape, b.shape) :
-                new BinaryOpProgram(SQUARED_DIFFERENCE, a.shape, b.shape);
-            return webGLBackend.compileAndRun(program, [a, b]);
-        }
+        kernelFunc: squaredDifferenceKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const TAN = `return tan(x);`;
+    const tanKernelFunc$1 = unaryKernelFunc$1(TAN);
+    const tanConfig$1 = {
+        kernelName: Tan,
+        backendName: 'webgl',
+        kernelFunc: tanKernelFunc$1,
     };
 
     /**
@@ -67099,6 +69099,42 @@ return (round(mod(b, 2.0)) != 1) ?
     /**
      * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function unique$3(args) {
+        const { inputs, attrs, backend } = args;
+        const { axis } = attrs;
+        const { x } = inputs;
+        assertNotComplex$1(x, 'unique');
+        // For now, always forward calculation to the CPU backend.
+        console.warn('WARNING: ', 'UI might be locked temporarily as data is being downloaded');
+        const values = backend.readSync(x.dataId);
+        const { outputValues, outputShape, indices } = uniqueImplCPU(values, axis, x.shape, x.dtype);
+        return [
+            backend.makeTensorInfo(outputShape, x.dtype, outputValues),
+            backend.makeTensorInfo([indices.length], 'int32', indices),
+        ];
+    }
+    const uniqueConfig$1 = {
+        kernelName: Unique,
+        backendName: 'webgl',
+        kernelFunc: unique$3,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -67114,10 +69150,30 @@ return (round(mod(b, 2.0)) != 1) ?
      */
     // List all kernel configs here
     const kernelConfigs$1 = [
-        maxConfig$1, flipLeftRightConfig$1, fromPixelsConfig, divConfig$1,
-        maxPoolWithArgmaxConfig$1, nonMaxSuppressionV3Config, nonMaxSuppressionV4Config$1,
-        nonMaxSuppressionV5Config$1, rotateWithOffsetConfig$1, squareConfig$1,
-        squaredDifferenceConfig$1, transposeConfig$1
+        atan2Config,
+        avgPoolConfig$1,
+        avgPoolBackpropConfig$1,
+        batchNormConfig$1,
+        cosConfig$1,
+        divConfig$1,
+        flipLeftRightConfig$1,
+        fromPixelsConfig,
+        identityConfig$1,
+        maxConfig$1,
+        maxPoolConfig$1,
+        maxPoolBackpropConfig$1,
+        maxPoolWithArgmaxConfig$1,
+        nonMaxSuppressionV3Config,
+        nonMaxSuppressionV4Config$1,
+        nonMaxSuppressionV5Config$1,
+        reshapeConfig$1,
+        rotateWithOffsetConfig$1,
+        sinConfig$1,
+        squareConfig$1,
+        squaredDifferenceConfig$1,
+        tanConfig$1,
+        transposeConfig$1,
+        uniqueConfig$1,
     ];
     for (const kernelConfig of kernelConfigs$1) {
         registerKernel(kernelConfig);
@@ -67169,6 +69225,10 @@ return (round(mod(b, 2.0)) != 1) ?
             for (let i = 0; i < num; i++) {
                 this.push(randomNormal([1, this.latentDim]));
             }
+        }
+
+        sub(style) {
+            return this.map((val, i) => sub(val, style[i]))
         }
 
         move(v) {
@@ -67255,63 +69315,169 @@ return (round(mod(b, 2.0)) != 1) ?
         }
     }
 
-    class BatchGenerator {
-        constructor(...args) {
-            this.reset(...args);
+    const exposed = {
+        proxy(val) { return val }
+    };
 
-            this.resetQueue();
-            this.queueTS = undefined;
-            this.queueCb = undefined;
+    /**
+     * Basic explorer class with common methods.
+     */
+    class Explorer {
+        constructor() {
+            this.onReleaseCallbacks = [];
+        }
+
+        onRelease(cb) {
+            this.onReleaseCallbacks.push(cb);
+        }
+
+        release() {
+            this.onReleaseCallbacks.forEach(cb => cb(this));
         }
 
         reset() { }
 
-        resetQueue() { }
+        update() { }
+    }
 
-        queue(cb) {
-            this.resetQueue();
+    /**
+     * Executes a callback `cb` asynchronously using `setTimeout`
+     * for every value in an [iterable](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#The_iterable_protocol).
+     * 
+     * The iterable can be replaced at any time, making the executor switch to the new iterable.
+     * 
+     * This is useful for long blocking operations being split into batches, executed with `cb`.
+     * The execution of events coming in from the event loop is not blocked,
+     * making it possible to stop the execution or change the batch configuration.
+     * 
+     * @example
+     * const executor = new BatchExecutor([0, 1, 2])
+     * const cb = (i) => console.log(i)
+     * 
+     * executor.start(cb)
+     * 
+     * setTimeout(() => setTimeout(() => {
+     *     executor.iterable = ['a', 'b', 'c']
+     *     setTimeout(() => executor.stop())
+     * }))
+     * 
+     * // expected output sequence:
+     * // 0, 1, a
+     */
+    class BatchExecutor {
+        /**
+         * Initializes the batch executor with an iterable.
+         * @param {Iterable} iterable 
+         */
+        constructor(iterable) {
+            this.iterable = iterable;
+            this._stepTS = undefined;
+            this._stepCb = undefined;
+        }
 
-            this.queueCb = cb;
+        /**
+         * Sets a new iterable, replacing the old one.
+         * @param {Iterable} iterable
+         */
+        set iterable(iterable) {
+            this._iterator = iterable?.[Symbol.iterator]();
+        }
 
-            if (!this.queueTS) {
-                this.queueTS = setTimeout(() => this.queueStep());
+        /**
+         * Start executing the given `cb` function with values of the current iterator.
+         * Will continue executing until
+         * - the iterator is done or
+         * - `stop()` is called.
+         * 
+         * Execution will continue with new iterator when `iterable` is set,
+         * but only if execution is not done/stopped.
+         * @param {(value: any) => void} cb callback that takes a single iterator value as argument on each iteration.
+         */
+        start(cb) {
+            this._stepCb = cb;
+
+            if (!this._stepTS) {
+                this._stepTS = setTimeout(() => this._step());
             }
         }
 
-        queueStep() {
-            this.queueCb(this.next());
+        /**
+         * Stops execution. Does not reset the iterator.
+         */
+        stop() {
+            clearTimeout(this._stepTS);
+            this._stepTS = undefined;
+        }
 
-            if (this.done) {
-                this.queueTS = undefined;
+        _step() {
+            const {done, value} = this._iterator.next();
+
+            if (done) {
+                this._stepTS = undefined;
             }
             else {
-                this.queueTS = setTimeout(() => this.queueStep());
+                this._stepCb(value);
+                this._stepTS = setTimeout(() => this._step());
             }
         }
+    }
 
-        get done() {
-            return true
+
+    /**
+     * Abstract BatchGenerator class. Implements the
+     * [iterable protocol](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#The_iterable_protocol).
+     * 
+     * Derived classes must implement
+     * - `next() : {done: boolean, value: <batch>}`
+     * - `reset() : void`
+     * 
+     * @see BatchGenerator2DAIO for an example implemenation
+     */
+    class BatchGenerator {
+        [Symbol.iterator]() {
+            this.reset();
+            return this
         }
 
-        next() { }
+        /**
+         * Resets the batch generator.
+         * It is also called when a new iterator is requested.
+         * 
+         * **Implemented by derived classes.**
+         */
+        reset() { }
+
+        /**
+         * `next` function ccording to the
+         * [iterator protocol](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#The_iterator_protocol).
+         * 
+         * **Implemented by derived classes.**
+         * 
+         * @returns {{done: boolean, value: any}}
+         */
+        next() {
+            return {
+                done: true,
+                value: undefined,
+            }
+        }
     }
 
     class BatchGenerator2DAIO extends BatchGenerator {
-        reset(w=3, h=3) {
+        constructor(w=3, h=3) {
+            super();
             this.w = w;
             this.h = h;
+            this.done = false;
         }
 
-        resetQueue() {
-            this.i = 0;
-        }
-
-        get done() {
-            return this.i >= 1
+        reset() {
+            this.done = false;
         }
 
         next() {
-            this.i++;
+            if (this.done) return {done: true, value: undefined}
+            this.done = true;
 
             const positions = [];
 
@@ -67321,75 +69487,145 @@ return (round(mod(b, 2.0)) != 1) ?
                 }
             }
 
-            return positions
+            return {
+                done: false,
+                value: positions,
+            }
         }
     }
 
-    class Exploration {
+    class TransferBay extends Array {
+        clear() {
+            this.length = 0;
+        }
+    }
+
+    const transferBay = new TransferBay();
+
+    class TransferContainer {
+        constructor(valueCb, evalCb) {
+            this.valueCb = valueCb;
+            this.evalCb = evalCb;
+        }
+
+        getValue() {
+            return this.valueCb()
+        }
+
+        evaluate() {
+            const value = this.valueCb();
+            return this.evalCb? this.evalCb(value) : value
+        }
+    }
+
+    class DirectionExplorer extends Explorer {
+        init({n = 9} = {}, central) {
+            this.n = n;
+
+            this.central = central;
+
+            this.batchDef = [];
+            this.v = [];
+
+            for (let i = 0; i < this.n; i++) {
+                this.batchDef.push(i);
+                this.v.push(oneHot(i, central.style.latentDim));
+            }
+
+            this.batchExecutor = new BatchExecutor();
+        }
+
+        getV(i) {
+            return this.v[i].arraySync()
+        }
+
+        getLatent(i) {
+            return this.central.style.move(this.v[i].mul(this.central.scale))
+        }
+
+        transferLatent(i) {
+            return transferBay.push(new TransferContainer(this.getLatent.bind(this, i), style => style.arraySync())) - 1
+        }
+
+        update() {
+            this.batchExecutor.iterable = this.batchDef;
+            this.batchExecutor.start(this.queueStep.bind(this));
+        }
+
+        async queueStep(positionInfo) {
+            const model = await getModel();
+
+            tidy(() => {
+                const exStyle = this.central.style.move(this.v[positionInfo].mul(this.central.scale));
+
+                const combined = this.central.imageNoise.combineWithStyles(exStyle);
+
+                const tensor = model.execute(combined);
+
+                const imageData = toImg(tensor, 1);
+
+                this.onUpdate?.(imageData, positionInfo);
+            });
+        }
+    }
+
+    class PlaneExplorer extends Explorer {
         /**
          * Initializes class. Has to be called exactly once before the class can be used.
          */
-        async init({n = 3, scale = 0.5, config, onUpdate} = {}) {
+        async init({n = 3, config} = {}, central) {
             this.n = n;
-            this.scale = scale;
-            this.onUpdate = onUpdate;
+            this.central = central;
 
             this.batchGenerator = new BatchGenerator2DAIO(n, n);
+            this.batchExecutor = new BatchExecutor(this.batchGenerator);
 
             if (config) {
                 this.setConfig(config);
             }
             else {
-                this.imageNoise = new ImageNoise();
-                this.style = new Style();
-        
-                this.vx = oneHot(1, this.style.latentDim);
-                this.vy = oneHot(2, this.style.latentDim);
+                this.randomV();
             }
         }
 
-        getConfig() {
-            const config = {
-                style: this.style.arraySync(),
-                imageNoise: this.imageNoise.arraySync(),
-                vx: this.vx.arraySync(),
-                vy: this.vy.arraySync(),
-                scale: this.scale,
-                n: this.n
-            };
-
-            return config
+        get vx() {
+            return this._vx
         }
 
-        setConfig(config) {
-            this.n = config.n;
-            this.scale = config.scale;
+        /**
+         * Sets vx and disposes of old vx.
+         * @param {tf.Tensor || Array} vx
+         */
+        set vx(vx) {
+            this._vx && dispose(this._vx);
+            this._vx = vx instanceof Tensor?
+                vx :
+                tensor(vx);
+        }
 
-            dispose(this.imageNoise);
-            dispose(this.style);
-            dispose(this.vx);
-            dispose(this.vy);
-            this.imageNoise = ImageNoise.fromData(config.imageNoise);
-            this.style = Style.fromData(config.style);
-            this.vx = tensor(config.vx);
-            this.vy = tensor(config.vy);
+        get vy() {
+            return this._vy
+        }
 
-            this.batchGenerator.reset(n, n);
-
-            this.update();
+        /**
+         * Sets vy and disposes of old vy.
+         * @param {tf.Tensor || Array} vy
+         */
+        set vy(vy) {
+            this._vy && dispose(this._vy);
+            this._vy = vy instanceof Tensor?
+                vy :
+                tensor(vy);
         }
 
         reset() {
-            this.imageNoise.random();
-            this.style.random();
+            this.randomV();
+        }
 
-            //scale = 0.5
-            dispose(this.vx);
-            dispose(this.vy);
-            this.vx = oneHot(1, this.style.latentDim);
-            this.vy = oneHot(2, this.style.latentDim);
 
-            this.update();
+        randomV() {
+            this.vx = oneHot(Math.floor(Math.random() * this.central.style.latentDim), this.central.style.latentDim);
+            this.vy = oneHot(Math.floor(Math.random() * this.central.style.latentDim), this.central.style.latentDim);
         }
 
         moveTo(x, y) {
@@ -67398,34 +69634,62 @@ return (round(mod(b, 2.0)) != 1) ?
                 const dx = x - center / center;
                 const dy = y - center / center;
 
-                this.style = this.style.move(add$1(
-                    this.vx.mul(this.scale * dx),
-                    this.vy.mul(this.scale * dy)));
+                this.central.style = tidy(() => this.central.style.move(add$1(
+                    this.vx.mul(this.central.scale * dx),
+                    this.vy.mul(this.central.scale * dy))));
 
                 this.update();
             }
         }
 
-        /** Initiates model (otherwise lazy loaded in update fn) */
-        async preLoad() {
-            await getModel();
-            return true
+        setLatent(x, y, transferIndex) {
+            const style = tidy(() => transferBay[transferIndex].getValue());
+            const center = (this.n-1)/2;
+            if (x !== center || y !== center) {
+                const dx = x - center / center;
+                const dy = y - center / center;
+
+                tidy(() =>{
+                    let v = this.central.style.sub(style)[0].reshape([-1]).div(this.central.scale).mul(-1);
+
+                    if (dx === 0) {
+                        this.vy = v.mul(dy);
+                    }
+                    else if (dy === 0) {
+                        this.vx = v.mul(dx);
+                    }
+                    else {
+                        const fix = this.vx.mul(-dx).add(this.vy.mul(dy));
+
+                        this.vy = v.add(fix).div(2 * dy);
+                        this.vx = v.sub(fix).div(2 * dx);
+                    }
+
+                    keep(this.vx);
+                    keep(this.vy);
+                });
+            }
+            else {
+                this.central.style = style;
+            }
+            this.update();
         }
 
-        async update() {
-            this.batchGenerator.queue(this.queueStep.bind(this));
+        update() {
+            this.batchExecutor.iterable = this.batchGenerator;
+            this.batchExecutor.start(this.queueStep.bind(this));
         }
 
         async queueStep(positionInfo) {
             const model = await getModel();
 
             tidy(() => {
-                const exStyle = this.style.batchExpand2d(
-                    this.vx.mul(this.scale),
-                    this.vy.mul(this.scale),
+                const exStyle = this.central.style.batchExpand2d(
+                    this.vx.mul(this.central.scale),
+                    this.vy.mul(this.central.scale),
                     positionInfo.map(([x, y]) => [x - (this.n - 1) / 2, y - (this.n - 1) / 2]));
 
-                const combined = this.imageNoise.combineWithStyles(exStyle);
+                const combined = this.central.imageNoise.combineWithStyles(exStyle);
 
                 const tensor = model.execute(combined);
 
@@ -67433,6 +69697,117 @@ return (round(mod(b, 2.0)) != 1) ?
 
                 this.onUpdate?.(imageData, positionInfo);
             });
+        }
+
+    }
+
+    class SharedState {
+        constructor({imageNoise, style, scale = 0.5} = {}) {
+            this.imageNoise = imageNoise || new ImageNoise();
+            this.style = style || new Style();
+            this.scale = scale;
+        }
+
+        get imageNoise() {
+            return this._imageNoise
+        }
+
+        /**
+         * Sets imageNoise and disposes of old imageNoise.
+         * @param {ImageNoise || Array} noise
+         */
+        set imageNoise(noise) {
+            this._imageNoise && dispose(this._imageNoise);
+            this._imageNoise = noise instanceof ImageNoise?
+                noise :
+                ImageNoise.fromData(noise);
+
+            this.onUpdate?.();
+        }
+
+        get style() {
+            return this._style
+        }
+
+        /**
+         * Sets style and disposes of old style.
+         * @param {Style || Array} style
+         */
+        set style(style) {
+            this._style && dispose(this._style);
+            this._style = style instanceof Style?
+                style :
+                Style.fromData(style);
+
+            this.onUpdate?.();
+        }
+
+        get scale() {
+            return this._scale
+        }
+
+        set scale(scale) {
+            this._scale = scale;
+            this.onUpdate?.();
+        }
+    }
+
+    class Exploration {
+        constructor() {
+            this.central = new SharedState();
+            this.central.onUpdate = () => this.update();
+
+            this.explorers = [];
+        }
+
+        /**
+         * @param {number} scale
+         */
+        set scale(scale) {
+            this.central.scale = scale;
+        }
+
+        createPlaneExplorer(options) {
+            const planeExplorer = new PlaneExplorer();
+
+            this.explorers.push(planeExplorer);
+            planeExplorer.onRelease(() => this.explorers.splice(this.explorers.indexOf(planeExplorer), 1));
+
+            planeExplorer.init(options, this.central);
+
+            return exposed.proxy(planeExplorer)
+        }
+
+        createDirectionExplorer(options) {
+            const directionExplorer = new DirectionExplorer();
+
+            this.explorers.push(directionExplorer);
+            directionExplorer.onRelease(() => this.explorers.splice(this.explorers.indexOf(directionExplorer), 1));
+
+            directionExplorer.init(options, this.central);
+
+            return exposed.proxy(directionExplorer)
+        }
+
+        reset() {
+            this.central.imageNoise.random();
+            this.central.style.random();
+
+            //scale = 0.5
+            this.explorers.forEach(explorer => explorer.reset());
+
+            this.update();
+        }
+
+
+        /** Initiates model (otherwise lazy loaded in update fn) */
+        async preLoad() {
+            await getModel();
+            return true
+        }
+
+        update() {
+            this.explorers.forEach(explorer => explorer.update());
         }
     }
 
@@ -67673,6 +70048,13 @@ return (round(mod(b, 2.0)) != 1) ?
     function proxy(obj) {
         return Object.assign(obj, { [proxyMarker]: true });
     }
+    function windowEndpoint(w, context = self, targetOrigin = "*") {
+        return {
+            postMessage: (msg, transferables) => w.postMessage(msg, targetOrigin, transferables),
+            addEventListener: context.addEventListener.bind(context),
+            removeEventListener: context.removeEventListener.bind(context),
+        };
+    }
     function toWireValue(value) {
         for (const [name, handler] of transferHandlers) {
             if (handler.canHandle(value)) {
@@ -67726,28 +70108,52 @@ return (round(mod(b, 2.0)) != 1) ?
             .join("-");
     }
 
-    const explore = async options => {
-        const {webgl, worker, offscreen} = checkSupport();
-        const useWorker = worker && (!webgl || (webgl && offscreen));
+    var Comlink = /*#__PURE__*/Object.freeze({
+        __proto__: null,
+        createEndpoint: createEndpoint,
+        expose: expose,
+        proxy: proxy,
+        proxyMarker: proxyMarker,
+        releaseProxy: releaseProxy,
+        transfer: transfer,
+        transferHandlers: transferHandlers,
+        windowEndpoint: windowEndpoint,
+        wrap: wrap
+    });
 
-        console.log(useWorker? 'using worker' : 'not using worker');
+    window.Comlink = Comlink;
 
-        if (useWorker) {
-            const explorer = wrap(new Worker('dist/exploration-worker.js'));
 
-            // proxy should ideally be released at some point
-            const onUpdate = proxy(options.onUpdate);
-            delete options.onUpdate;
-            await explorer.init(options);
+    let _useWorker;
 
-            explorer.onUpdate = onUpdate;
-            return explorer
+    const useWorker = () => {
+        // if _useWorker was not set yet, provide a sensible default
+        if (_useWorker === undefined) {
+            const {webgl, worker, offscreen} = checkSupport();
+            _useWorker = worker && (!webgl || (webgl && offscreen));
+        }
+
+        return _useWorker
+    };
+
+
+    const explore = async () => {
+        if (useWorker()) {
+            console.info('using worker');
+            const exploration = wrap(new Worker('dist/exploration-worker.js'));
+            return exploration
         }
         else {
-            const explorer = new Exploration();
-            await explorer.init(options);
-            return explorer
+            console.info('not using worker');
+            const exploration = new Exploration();
+            return exploration
         }
+    };
+
+    const proxy$1 = cb => {
+        return useWorker()?
+            proxy(cb) :
+            cb
     };
 
     var FileSaver_min = createCommonjsModule(function (module, exports) {
@@ -67756,88 +70162,209 @@ return (round(mod(b, 2.0)) != 1) ?
 
     });
 
-    /* src/views/Generator.svelte generated by Svelte v3.29.0 */
+    const dragged = {
+        valuePromise: null
+    };
 
-    const { document: document_1 } = globals;
+    /* src/views/exploration/Plane.svelte generated by Svelte v3.29.4 */
 
     function add_css() {
     	var style = element("style");
-    	style.id = "svelte-473yk1-style";
-    	style.textContent = ".background.svelte-473yk1{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background-color:#051A33}";
-    	append(document_1.head, style);
+    	style.id = "svelte-1nycu52-style";
+    	style.textContent = ".canvas-row.svelte-1nycu52{display:flex}";
+    	append(document.head, style);
     }
 
-    function create_fragment(ctx) {
-    	let div;
+    function get_each_context_1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[13] = list[i];
+    	child_ctx[14] = list;
+    	child_ctx[15] = i;
+    	return child_ctx;
+    }
+
+    function get_each_context(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[10] = list[i];
+    	child_ctx[11] = list;
+    	child_ctx[12] = i;
+    	return child_ctx;
+    }
+
+    // (65:8) {#each [0, 1, 2] as y}
+    function create_each_block_1(ctx) {
     	let canvas_1;
+    	let canvas_1_id_value;
     	let canvas_1_width_value;
     	let canvas_1_height_value;
-    	let t0;
-    	let input;
-    	let t1;
-    	let button;
+    	let x = /*x*/ ctx[10];
+    	let y = /*y*/ ctx[13];
     	let mounted;
     	let dispose;
+    	const assign_canvas_1 = () => /*canvas_1_binding*/ ctx[6](canvas_1, x, y);
+    	const unassign_canvas_1 = () => /*canvas_1_binding*/ ctx[6](null, x, y);
 
     	return {
     		c() {
-    			div = element("div");
     			canvas_1 = element("canvas");
-    			t0 = space();
-    			input = element("input");
-    			t1 = space();
-    			button = element("button");
-    			button.textContent = "reset";
-    			attr(canvas_1, "id", "canvas");
-    			attr(canvas_1, "width", canvas_1_width_value = n$1 * 64);
-    			attr(canvas_1, "height", canvas_1_height_value = n$1 * 64);
-    			attr(input, "type", "range");
-    			attr(input, "min", "1");
-    			attr(input, "max", "500");
-    			input.value = "50";
-    			attr(input, "id", "scale-slider");
-    			attr(div, "class", "background svelte-473yk1");
+    			attr(canvas_1, "id", canvas_1_id_value = `canvas${/*x*/ ctx[10]}-${/*y*/ ctx[13]}`);
+    			attr(canvas_1, "width", canvas_1_width_value = 1 * 64);
+    			attr(canvas_1, "height", canvas_1_height_value = 1 * 64);
+    			attr(canvas_1, "ondragover", "return false");
     		},
     		m(target, anchor) {
-    			insert(target, div, anchor);
-    			append(div, canvas_1);
-    			/*canvas_1_binding*/ ctx[6](canvas_1);
-    			append(div, t0);
-    			append(div, input);
-    			/*input_binding*/ ctx[7](input);
-    			append(div, t1);
-    			append(div, button);
+    			insert(target, canvas_1, anchor);
+    			assign_canvas_1();
 
     			if (!mounted) {
     				dispose = [
-    					listen(canvas_1, "click", /*onCanvasClick*/ ctx[3]),
-    					listen(canvas_1, "wheel", /*onCanvasScroll*/ ctx[4]),
-    					listen(input, "input", /*onScaleSliderChange*/ ctx[5]),
-    					listen(button, "click", /*click_handler*/ ctx[8])
+    					listen(canvas_1, "click", /*onCanvasClick*/ ctx[1].bind(null, /*x*/ ctx[10], /*y*/ ctx[13])),
+    					listen(canvas_1, "wheel", /*onCanvasScroll*/ ctx[2]),
+    					listen(canvas_1, "drop", /*handleDrop*/ ctx[3].bind(null, /*x*/ ctx[10], /*y*/ ctx[13]))
     				];
 
     				mounted = true;
     			}
     		},
-    		p: noop,
-    		i: noop,
-    		o: noop,
+    		p(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (x !== /*x*/ ctx[10] || y !== /*y*/ ctx[13]) {
+    				unassign_canvas_1();
+    				x = /*x*/ ctx[10];
+    				y = /*y*/ ctx[13];
+    				assign_canvas_1();
+    			}
+    		},
     		d(detaching) {
-    			if (detaching) detach(div);
-    			/*canvas_1_binding*/ ctx[6](null);
-    			/*input_binding*/ ctx[7](null);
+    			if (detaching) detach(canvas_1);
+    			unassign_canvas_1();
     			mounted = false;
     			run_all(dispose);
     		}
     	};
     }
 
-    let n$1 = 3;
+    // (63:0) {#each [0, 1, 2] as x}
+    function create_each_block(ctx) {
+    	let div;
+    	let t;
+    	let each_value_1 = [0, 1, 2];
+    	let each_blocks = [];
+
+    	for (let i = 0; i < 3; i += 1) {
+    		each_blocks[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
+    	}
+
+    	return {
+    		c() {
+    			div = element("div");
+
+    			for (let i = 0; i < 3; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			t = space();
+    			attr(div, "class", "canvas-row svelte-1nycu52");
+    		},
+    		m(target, anchor) {
+    			insert(target, div, anchor);
+
+    			for (let i = 0; i < 3; i += 1) {
+    				each_blocks[i].m(div, null);
+    			}
+
+    			append(div, t);
+    		},
+    		p(ctx, dirty) {
+    			if (dirty & /*canvas, onCanvasClick, onCanvasScroll, handleDrop*/ 15) {
+    				each_value_1 = [0, 1, 2];
+    				let i;
+
+    				for (i = 0; i < 3; i += 1) {
+    					const child_ctx = get_each_context_1(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(div, t);
+    					}
+    				}
+
+    				for (; i < 3; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+    			}
+    		},
+    		d(detaching) {
+    			if (detaching) detach(div);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+    }
+
+    function create_fragment(ctx) {
+    	let each_1_anchor;
+    	let each_value = [0, 1, 2];
+    	let each_blocks = [];
+
+    	for (let i = 0; i < 3; i += 1) {
+    		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+    	}
+
+    	return {
+    		c() {
+    			for (let i = 0; i < 3; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m(target, anchor) {
+    			for (let i = 0; i < 3; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert(target, each_1_anchor, anchor);
+    		},
+    		p(ctx, [dirty]) {
+    			if (dirty & /*canvas, onCanvasClick, onCanvasScroll, handleDrop*/ 15) {
+    				each_value = [0, 1, 2];
+    				let i;
+
+    				for (i = 0; i < 3; i += 1) {
+    					const child_ctx = get_each_context(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < 3; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach(each_1_anchor);
+    		}
+    	};
+    }
 
     function instance($$self, $$props, $$invalidate) {
-    	let canvas;
-    	let scaleSlider;
-    	let scale = 0.5;
+    	let { exploration } = $$props;
+    	let { scale } = $$props;
+    	let explorer;
+    	let canvas = new Array(3).fill(1).map(() => new Array(3).fill(1));
 
     	function onUpdate(imageData, positionInfo) {
     		if (!positionInfo) {
@@ -67846,88 +70373,404 @@ return (round(mod(b, 2.0)) != 1) ?
     		}
 
     		positionInfo.forEach(([x, y], i) => {
-    			ctx.putImageData(imageData, x * 64 - i * 64, y * 64, i * 64, 0, 64, 64);
+    			const ctx = canvas[x][y].getContext("2d");
+    			ctx.putImageData(imageData, 0 * 64 - i * 64, 0 * 64, i * 64, 0, 64, 64);
     		});
     	}
 
-    	let explorer;
-    	window.getConfig = () => explorer.getConfig();
-
-    	window.setConfig = config => {
-    		explorer.setConfig(config);
-    		explorer.update();
-    	};
-
-    	window.saveConfig = () => {
-    		const config = explorer.getConfig();
-    		const json = JSON.stringify(config);
-    		const file = new File([json], "icon.icon-def", { type: "text/plain;charset=utf-8" });
-    		FileSaver_min.saveAs(file);
-    	};
-
-    	function onCanvasClick(e) {
-    		const x = Math.floor(e.offsetX / 64);
-    		const y = Math.floor(e.offsetY / 64);
+    	function onCanvasClick(x, y) {
     		explorer.moveTo(x, y);
     	}
 
     	async function onCanvasScroll(e) {
     		e.preventDefault();
     		const deltaY = e.deltaY || -e.wheelData;
-    		scale += deltaY / 500;
-    		$$invalidate(2, explorer.scale = scale, explorer);
+    		scale.update(v => v + deltaY / 500);
+    	}
+
+    	async function handleDrop(x, y, e) {
+    		const t = e.dataTransfer.getData("text");
+    		const v = await dragged.valuePromise;
+    		explorer.setLatent(x, y, v);
+    	}
+
+    	async function init() {
+    		$$invalidate(7, explorer = await exploration.createPlaneExplorer());
+    		$$invalidate(7, explorer.onUpdate = proxy$1(onUpdate), explorer);
+    		window.planeExplorer = explorer;
     		explorer.update();
     	}
 
-    	function onScaleSliderChange(e) {
-    		scale = e.target.value / 10;
-    		$$invalidate(2, explorer.scale = scale, explorer);
+    	function canvas_1_binding($$value, x, y) {
+    		binding_callbacks[$$value ? "unshift" : "push"](() => {
+    			canvas[x][y] = $$value;
+    			$$invalidate(0, canvas);
+    		});
+    	}
+
+    	$$self.$$set = $$props => {
+    		if ("exploration" in $$props) $$invalidate(4, exploration = $$props.exploration);
+    		if ("scale" in $$props) $$invalidate(5, scale = $$props.scale);
+    	};
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*explorer, exploration*/ 144) {
+    			 if (!explorer && exploration) {
+    				init();
+    			}
+    		}
+    	};
+
+    	return [
+    		canvas,
+    		onCanvasClick,
+    		onCanvasScroll,
+    		handleDrop,
+    		exploration,
+    		scale,
+    		canvas_1_binding
+    	];
+    }
+
+    class Plane extends SvelteComponent {
+    	constructor(options) {
+    		super();
+    		if (!document.getElementById("svelte-1nycu52-style")) add_css();
+    		init(this, options, instance, create_fragment, safe_not_equal, { exploration: 4, scale: 5 });
+    	}
+    }
+
+    /* src/views/exploration/Direction.svelte generated by Svelte v3.29.4 */
+
+    function get_each_context$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[9] = list[i];
+    	child_ctx[10] = list;
+    	child_ctx[11] = i;
+    	return child_ctx;
+    }
+
+    // (44:0) {#each sideIndices as _, i}
+    function create_each_block$1(ctx) {
+    	let canvas;
+    	let canvas_id_value;
+    	let canvas_width_value;
+    	let canvas_height_value;
+    	let i = /*i*/ ctx[11];
+    	let mounted;
+    	let dispose;
+    	const assign_canvas = () => /*canvas_binding*/ ctx[4](canvas, i);
+    	const unassign_canvas = () => /*canvas_binding*/ ctx[4](null, i);
+
+    	return {
+    		c() {
+    			canvas = element("canvas");
+    			attr(canvas, "id", canvas_id_value = `sideCanvas${/*i*/ ctx[11]}`);
+    			attr(canvas, "width", canvas_width_value = 1 * 64);
+    			attr(canvas, "height", canvas_height_value = 1 * 64);
+    			attr(canvas, "draggable", "true");
+    		},
+    		m(target, anchor) {
+    			insert(target, canvas, anchor);
+    			assign_canvas();
+
+    			if (!mounted) {
+    				dispose = listen(canvas, "dragstart", /*handleDragStart*/ ctx[2].bind(null, /*i*/ ctx[11]));
+    				mounted = true;
+    			}
+    		},
+    		p(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (i !== /*i*/ ctx[11]) {
+    				unassign_canvas();
+    				i = /*i*/ ctx[11];
+    				assign_canvas();
+    			}
+    		},
+    		d(detaching) {
+    			if (detaching) detach(canvas);
+    			unassign_canvas();
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+    }
+
+    function create_fragment$1(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*sideIndices*/ ctx[1];
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    	}
+
+    	return {
+    		c() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert(target, each_1_anchor, anchor);
+    		},
+    		p(ctx, [dirty]) {
+    			if (dirty & /*sideCanvas, handleDragStart*/ 5) {
+    				each_value = /*sideIndices*/ ctx[1];
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach(each_1_anchor);
+    		}
+    	};
+    }
+
+    const n = 128;
+
+    function instance$1($$self, $$props, $$invalidate) {
+    	let { exploration } = $$props;
+    	let explorer;
+    	const sideIndices = new Array(n);
+    	let sideCanvas = [];
+
+    	function onSideUpdate(imageData, positionInfo) {
+    		const i = 0;
+    		const j = positionInfo;
+    		const sideCtx = sideCanvas[j].getContext("2d");
+    		const x = 0; //j % 3
+    		const y = 0; //(j - x) / 3
+    		sideCtx.putImageData(imageData, x * 64 - i * 64, y * 64, i * 64, 0, 64, 64);
+    	}
+
+    	async function handleDragStart(i, e) {
+    		e.dataTransfer.dropEffect = "move";
+    		e.dataTransfer.setData("text", "dragging...");
+    		dragged.valuePromise = explorer.transferLatent(i);
+    	}
+
+    	async function init() {
+    		$$invalidate(6, explorer = await exploration.createDirectionExplorer({ n }));
+    		window.directionExplorer = explorer;
+    		$$invalidate(6, explorer.onUpdate = proxy$1(onSideUpdate), explorer);
     		explorer.update();
+    	}
+
+    	function canvas_binding($$value, i) {
+    		binding_callbacks[$$value ? "unshift" : "push"](() => {
+    			sideCanvas[i] = $$value;
+    			$$invalidate(0, sideCanvas);
+    		});
+    	}
+
+    	$$self.$$set = $$props => {
+    		if ("exploration" in $$props) $$invalidate(3, exploration = $$props.exploration);
+    	};
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*explorer, exploration*/ 72) {
+    			 if (!explorer && exploration) {
+    				init();
+    			}
+    		}
+    	};
+
+    	return [sideCanvas, sideIndices, handleDragStart, exploration, canvas_binding];
+    }
+
+    class Direction extends SvelteComponent {
+    	constructor(options) {
+    		super();
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { exploration: 3 });
+    	}
+    }
+
+    /* src/views/Generator.svelte generated by Svelte v3.29.4 */
+
+    const { document: document_1 } = globals;
+
+    function add_css$1() {
+    	var style = element("style");
+    	style.id = "svelte-cbfrcw-style";
+    	style.textContent = ".background.svelte-cbfrcw{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background-color:#051A33}.sidebar-container.svelte-cbfrcw{position:absolute;top:0px;right:0px;height:100%;overflow:scroll}.sidebar.svelte-cbfrcw{width:128px;display:flex;flex-flow:wrap}";
+    	append(document_1.head, style);
+    }
+
+    function create_fragment$2(ctx) {
+    	let div2;
+    	let plane;
+    	let t0;
+    	let input;
+    	let t1;
+    	let button;
+    	let t3;
+    	let div1;
+    	let div0;
+    	let direction;
+    	let current;
+    	let mounted;
+    	let dispose;
+
+    	plane = new Plane({
+    			props: {
+    				scale: /*scale*/ ctx[2],
+    				exploration: /*exploration*/ ctx[1]
+    			}
+    		});
+
+    	direction = new Direction({
+    			props: { exploration: /*exploration*/ ctx[1] }
+    		});
+
+    	return {
+    		c() {
+    			div2 = element("div");
+    			create_component(plane.$$.fragment);
+    			t0 = space();
+    			input = element("input");
+    			t1 = space();
+    			button = element("button");
+    			button.textContent = "reset";
+    			t3 = space();
+    			div1 = element("div");
+    			div0 = element("div");
+    			create_component(direction.$$.fragment);
+    			attr(input, "type", "range");
+    			attr(input, "min", "1");
+    			attr(input, "max", "500");
+    			input.value = "50";
+    			attr(input, "id", "scale-slider");
+    			attr(div0, "class", "sidebar svelte-cbfrcw");
+    			attr(div1, "class", "sidebar-container svelte-cbfrcw");
+    			attr(div2, "class", "background svelte-cbfrcw");
+    		},
+    		m(target, anchor) {
+    			insert(target, div2, anchor);
+    			mount_component(plane, div2, null);
+    			append(div2, t0);
+    			append(div2, input);
+    			/*input_binding*/ ctx[4](input);
+    			append(div2, t1);
+    			append(div2, button);
+    			append(div2, t3);
+    			append(div2, div1);
+    			append(div1, div0);
+    			mount_component(direction, div0, null);
+    			current = true;
+
+    			if (!mounted) {
+    				dispose = [
+    					listen(input, "input", /*onScaleSliderChange*/ ctx[3]),
+    					listen(button, "click", /*click_handler*/ ctx[5])
+    				];
+
+    				mounted = true;
+    			}
+    		},
+    		p(ctx, [dirty]) {
+    			const plane_changes = {};
+    			if (dirty & /*exploration*/ 2) plane_changes.exploration = /*exploration*/ ctx[1];
+    			plane.$set(plane_changes);
+    			const direction_changes = {};
+    			if (dirty & /*exploration*/ 2) direction_changes.exploration = /*exploration*/ ctx[1];
+    			direction.$set(direction_changes);
+    		},
+    		i(local) {
+    			if (current) return;
+    			transition_in(plane.$$.fragment, local);
+    			transition_in(direction.$$.fragment, local);
+    			current = true;
+    		},
+    		o(local) {
+    			transition_out(plane.$$.fragment, local);
+    			transition_out(direction.$$.fragment, local);
+    			current = false;
+    		},
+    		d(detaching) {
+    			if (detaching) detach(div2);
+    			destroy_component(plane);
+    			/*input_binding*/ ctx[4](null);
+    			destroy_component(direction);
+    			mounted = false;
+    			run_all(dispose);
+    		}
+    	};
+    }
+
+    function instance$2($$self, $$props, $$invalidate) {
+    	let scaleSlider;
+    	let exploration;
+    	const scale = writable(0.5);
+
+    	scale.subscribe(value => {
+    		if (!exploration) return;
+    		$$invalidate(1, exploration.scale = value, exploration);
+    		exploration.update();
+    	});
+
+    	function onScaleSliderChange(e) {
+    		scale.set(e.target.value / 10);
     	}
 
     	onMount(async () => {
-    		$$invalidate(2, explorer = await explore({ onUpdate }));
-    		console.log("loading model");
-    		await explorer.preLoad();
-    		console.log("model loaded, update");
-    		explorer.update();
+    		const _exploration = await explore();
+    		window.exploration = _exploration;
+    		console.info("loading model");
+    		await _exploration.preLoad();
+
+    		// updates bindings
+    		$$invalidate(1, exploration = _exploration);
+
+    		console.info("model loaded, update");
+    		exploration.update();
     		const home = document.getElementById("home");
     		home.hidden = true;
     		const overlay = document.getElementById("overlay");
     		overlay.hidden = true;
     	});
 
-    	function canvas_1_binding($$value) {
-    		binding_callbacks[$$value ? "unshift" : "push"](() => {
-    			canvas = $$value;
-    			$$invalidate(0, canvas);
-    		});
-    	}
-
     	function input_binding($$value) {
     		binding_callbacks[$$value ? "unshift" : "push"](() => {
     			scaleSlider = $$value;
-    			$$invalidate(1, scaleSlider);
+    			$$invalidate(0, scaleSlider);
     		});
     	}
 
-    	const click_handler = () => explorer.reset();
-    	let ctx;
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*canvas*/ 1) {
-    			 ctx = canvas && canvas.getContext("2d");
-    		}
-    	};
+    	const click_handler = () => exploration.reset();
 
     	return [
-    		canvas,
     		scaleSlider,
-    		explorer,
-    		onCanvasClick,
-    		onCanvasScroll,
+    		exploration,
+    		scale,
     		onScaleSliderChange,
-    		canvas_1_binding,
     		input_binding,
     		click_handler
     	];
@@ -67936,12 +70779,12 @@ return (round(mod(b, 2.0)) != 1) ?
     class Generator extends SvelteComponent {
     	constructor(options) {
     		super();
-    		if (!document_1.getElementById("svelte-473yk1-style")) add_css();
-    		init(this, options, instance, create_fragment, safe_not_equal, {});
+    		if (!document_1.getElementById("svelte-cbfrcw-style")) add_css$1();
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
     	}
     }
 
-    /* src/App.svelte generated by Svelte v3.29.0 */
+    /* src/App.svelte generated by Svelte v3.29.4 */
 
     function create_if_block(ctx) {
     	let generator;
@@ -67971,7 +70814,7 @@ return (round(mod(b, 2.0)) != 1) ?
     	};
     }
 
-    function create_fragment$1(ctx) {
+    function create_fragment$3(ctx) {
     	let if_block_anchor;
     	let current;
     	let if_block = /*currentHash*/ ctx[0] === "#model" && create_if_block();
@@ -68024,7 +70867,7 @@ return (round(mod(b, 2.0)) != 1) ?
     	};
     }
 
-    function instance$1($$self, $$props, $$invalidate) {
+    function instance$3($$self, $$props, $$invalidate) {
     	let currentHash;
 
     	function onHashChange() {
@@ -68051,7 +70894,7 @@ return (round(mod(b, 2.0)) != 1) ?
     class App extends SvelteComponent {
     	constructor(options) {
     		super();
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
     	}
     }
 
