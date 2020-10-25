@@ -53,11 +53,30 @@
 
         background-color: #051A33;
     }
+
+    .sidebar-container {
+        position:absolute;
+        top: 0px;
+        right: 0px;
+        height: 100%;
+        overflow: scroll;
+    }
+
+    .sidebar {
+        width: 128px;
+        display: flex;
+        flex-flow: wrap;
+    }
 </style>
 
 <div class="background">
     <Plane scale={scale} exploration={exploration} />
     <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
-    <Direction exploration={exploration} />
     <button on:click={() => exploration.reset()}>reset</button>
+
+    <div class="sidebar-container">
+    <div class="sidebar">
+        <Direction exploration={exploration} />
+    </div>
+    </div>
 </div>

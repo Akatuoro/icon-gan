@@ -6,7 +6,9 @@ export let exploration
 
 let explorer
 
-const sideIndices = new Array(9)
+const n = 128
+
+const sideIndices = new Array(n)
 
 let sideCanvas = []
 
@@ -26,7 +28,7 @@ async function handleDragStart(i, e) {
 }
 
 async function init() {
-    explorer = await exploration.createDirectionExplorer({n: 9})
+    explorer = await exploration.createDirectionExplorer({n})
     window.directionExplorer = explorer
 
     explorer.onUpdate = proxy(onSideUpdate)
