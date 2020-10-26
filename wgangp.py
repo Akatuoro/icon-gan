@@ -7,21 +7,20 @@
 
 from __future__ import print_function, division
 
-from keras.datasets import mnist
-from keras.layers.merge import _Merge
-from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Add, Lambda
-from keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAveragePooling2D, AveragePooling2D
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import UpSampling2D, Conv2D
-from keras.models import Sequential, Model
-from keras.optimizers import RMSprop, Adam
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.layers import Input, Dense, Reshape, Flatten, Dropout, Add, Lambda
+from tensorflow.keras.layers import BatchNormalization, Activation, ZeroPadding2D, GlobalAveragePooling2D, AveragePooling2D
+from tensorflow.keras.layers import LeakyReLU
+from tensorflow.keras.layers import UpSampling2D, Conv2D
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.optimizers import RMSprop, Adam
 from functools import partial
 
 from libs.blocks import ResidualBlock, OptimizedResBlockDisc1
 from libs.architectures import build_generator, build_discriminator
 from gan import GAN
 
-import keras.backend as K
+import tensorflow.keras.backend as K
 
 import matplotlib.pyplot as plt
 
@@ -30,11 +29,10 @@ import sys
 import numpy as np
 
 
-class RandomWeightedAverage(_Merge):
+def randomWeightedAverage(inputs):
     """Provides a (random) weighted average between real and generated image samples"""
-    def _merge_function(self, inputs):
-        alpha = K.random_uniform((32, 1, 1, 1))
-        return (alpha * inputs[0]) + ((1 - alpha) * inputs[1])
+    alpha = K.random_uniform((32, 1, 1, 1))
+    return (alpha * inputs[0]) + ((1 - alpha) * inputs[1])
 
 class WGANGP(GAN):
     def __init__(self, *args, **kwargs):
@@ -70,7 +68,7 @@ class WGANGP(GAN):
         valid = self.critic(real_img)
 
         # Construct weighted average between real and fake images
-        interpolated_img = RandomWeightedAverage()([real_img, fake_img])
+        interpolated_img = Lambda(randomWeightedAverage, output_shape=lambda x: x[0])([real_img, fake_img])
         # Determine validity of weighted sample
         validity_interpolated = self.critic(interpolated_img)
 
@@ -111,7 +109,7 @@ class WGANGP(GAN):
         """
         Computes gradient penalty based on prediction and weighted real / fake samples
         """
-        gradients = K.gradients(y_pred, averaged_samples)[0]
+        gradients = K.gradients(y_pred, [averaged_samples])[0]
         # compute the euclidean norm by squaring ...
         gradients_sqr = K.square(gradients)
         #   ... summing over the rows ...

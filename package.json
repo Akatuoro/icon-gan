@@ -1,0 +1,45 @@
+{
+  "name": "icon-gan",
+  "version": "0.0.1",
+  "description": "Generate icons and logos with machine learning",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "bundle": "npm run build && mkdir -p build/dist && cp dist/* build/dist && cp index.html build/index.html",
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "dev": "run-p watch start",
+    "start": "serve"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Akatuoro/icon-gan.git"
+  },
+  "keywords": [
+    "icons",
+    "logos",
+    "GAN",
+    "tfjs"
+  ],
+  "author": "Akatuoro",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Akatuoro/icon-gan/issues"
+  },
+  "homepage": "https://github.com/Akatuoro/icon-gan#readme",
+  "dependencies": {
+    "@tensorflow/tfjs": "^2.0.1",
+    "npm-run-all": "^4.1.5",
+    "rollup-plugin-svelte": "^5.2.3",
+    "svelte": "^3.24.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^14.0.0",
+    "@rollup/plugin-node-resolve": "^8.4.0",
+    "comlink": "^4.3.0",
+    "file-saver": "^2.0.2",
+    "rollup": "^2.22.2",
+    "rollup-plugin-terser": "^6.1.0",
+    "serve": "^11.3.2"
+  }
+}
