@@ -5,6 +5,7 @@ import {ImageNoise, Style} from './input'
 import {exposed} from './exposed'
 import { DirectionExplorer } from './direction-explorer';
 import { PlaneExplorer } from './plane-exporer';
+import { transferBay } from './transfer';
 
 
 class SharedState {
@@ -114,5 +115,9 @@ export class Exploration {
 
     update() {
         this.explorers.forEach(explorer => explorer.update())
+    }
+
+    resolveTransfer(i) {
+        return tf.tidy(() => transferBay[i].evaluate())
     }
 }

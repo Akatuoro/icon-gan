@@ -33,11 +33,24 @@ async function onCanvasScroll(e) {
     scale.update(v => v + deltaY / 500)
 }
 
-async function handleDrop(x, y, e) {
-    const t = e.dataTransfer.getData('text')
+function handleDragStart(x, y, e) {
+    e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.setData('text', 'dragging...')
 
-    const v = await dragged.valuePromise
-    explorer.setLatent(x, y, v)
+    dragged.valuePromise = explorer.transferLatent(x, y)
+    dragged.imageData = canvas[x][y].getContext('2d').getImageData(0, 0, 64, 64)
+    dragged.isTransfer = true
+}
+
+function handleDragEnd(e) {
+    dragged.clear()
+}
+
+async function handleDrop(x, y, e) {
+    const {valuePromise, imageData, isTransfer} = dragged
+    const v = await valuePromise
+    if (isTransfer) explorer.setLatentTransfer(x, y, v)
+    else explorer.setLatent(x, y, v)
 }
 
 async function init() {
@@ -69,6 +82,9 @@ $: if (!explorer && exploration) {
                 id={`canvas${x}-${y}`}
                 width={1 * 64}
                 height={1 * 64}
+                draggable="true"
+                on:dragstart={handleDragStart.bind(null, x, y)}
+                on:dragend={handleDragEnd}
                 on:drop={handleDrop.bind(null, x, y)}
                 ondragover="return false">
             </canvas>
