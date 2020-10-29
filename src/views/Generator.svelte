@@ -6,6 +6,7 @@
     import Plane from './exploration/Plane.svelte';
     import Direction from './exploration/Direction.svelte';
     import Palette from './Palette.svelte';
+    import { dragged } from '../state/dragged';
 
     let scaleSlider
     let exploration
@@ -20,6 +21,18 @@
 
     function onScaleSliderChange(e) {
         scale.set(e.target.value / 10)
+    }
+
+    async function handleDownloadDrop() {
+        const {imageData} = dragged
+
+        const canvas = document.createElement('canvas')
+        canvas.width = 64
+        canvas.height = 64
+        const ctx = canvas.getContext('2d')
+        ctx.putImageData(imageData, 0, 0)
+
+        canvas.toBlob(blob => saveAs(blob, "icon.png"))
     }
 
     onMount(async () => {
@@ -75,6 +88,15 @@
         flex-flow: wrap;
         border: 1px solid #ff9b28;
     }
+
+    .download-drop {
+        position:absolute;
+        bottom: 0px;
+        left: 0px;
+        height: 64px;
+        width: 64px;
+        border: 1px dashed #ff9b28;
+    }
 </style>
 
 <div class="background">
@@ -84,6 +106,11 @@
 
     <div class="palette">
         <Palette {exploration} />
+    </div>
+
+    <div class="download-drop"
+        on:drop={handleDownloadDrop}
+        ondragover="return false">
     </div>
 
     <div class="sidebar-container">
