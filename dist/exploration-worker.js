@@ -293,7 +293,7 @@
 
     /**
      * @license
-     * Copyright 2018 Google LLC. All Rights Reserved.
+     * Copyright 2020 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -800,483 +800,7 @@
 
     /**
      * @license
-     * Copyright 2017 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    // Expects flags from URL in the format ?tfjsflags=FLAG1:1,FLAG2:true.
-    const TENSORFLOWJS_FLAGS_PREFIX = 'tfjsflags';
-    /**
-     * The environment contains evaluated flags as well as the registered platform.
-     * This is always used as a global singleton and can be retrieved with
-     * `tf.env()`.
-     *
-     * @doc {heading: 'Environment'}
-     */
-    class Environment {
-        // tslint:disable-next-line: no-any
-        constructor(global) {
-            this.global = global;
-            this.flags = {};
-            this.flagRegistry = {};
-            this.urlFlags = {};
-            this.populateURLFlags();
-        }
-        setPlatform(platformName, platform) {
-            if (this.platform != null) {
-                console.warn(`Platform ${this.platformName} has already been set. ` +
-                    `Overwriting the platform with ${platform}.`);
-            }
-            this.platformName = platformName;
-            this.platform = platform;
-        }
-        registerFlag(flagName, evaluationFn, setHook) {
-            this.flagRegistry[flagName] = { evaluationFn, setHook };
-            // Override the flag value from the URL. This has to happen here because the
-            // environment is initialized before flags get registered.
-            if (this.urlFlags[flagName] != null) {
-                const flagValue = this.urlFlags[flagName];
-                console.warn(`Setting feature override from URL ${flagName}: ${flagValue}.`);
-                this.set(flagName, flagValue);
-            }
-        }
-        async getAsync(flagName) {
-            if (flagName in this.flags) {
-                return this.flags[flagName];
-            }
-            this.flags[flagName] = await this.evaluateFlag(flagName);
-            return this.flags[flagName];
-        }
-        get(flagName) {
-            if (flagName in this.flags) {
-                return this.flags[flagName];
-            }
-            const flagValue = this.evaluateFlag(flagName);
-            if (flagValue instanceof Promise) {
-                throw new Error(`Flag ${flagName} cannot be synchronously evaluated. ` +
-                    `Please use getAsync() instead.`);
-            }
-            this.flags[flagName] = flagValue;
-            return this.flags[flagName];
-        }
-        getNumber(flagName) {
-            return this.get(flagName);
-        }
-        getBool(flagName) {
-            return this.get(flagName);
-        }
-        getFlags() {
-            return this.flags;
-        }
-        // For backwards compatibility.
-        get features() {
-            return this.flags;
-        }
-        set(flagName, value) {
-            if (this.flagRegistry[flagName] == null) {
-                throw new Error(`Cannot set flag ${flagName} as it has not been registered.`);
-            }
-            this.flags[flagName] = value;
-            if (this.flagRegistry[flagName].setHook != null) {
-                this.flagRegistry[flagName].setHook(value);
-            }
-        }
-        evaluateFlag(flagName) {
-            if (this.flagRegistry[flagName] == null) {
-                throw new Error(`Cannot evaluate flag '${flagName}': no evaluation function found.`);
-            }
-            return this.flagRegistry[flagName].evaluationFn();
-        }
-        setFlags(flags) {
-            this.flags = Object.assign({}, flags);
-        }
-        reset() {
-            this.flags = {};
-            this.urlFlags = {};
-            this.populateURLFlags();
-        }
-        populateURLFlags() {
-            if (typeof this.global === 'undefined' ||
-                typeof this.global.location === 'undefined' ||
-                typeof this.global.location.search === 'undefined') {
-                return;
-            }
-            const urlParams = getQueryParams(this.global.location.search);
-            if (TENSORFLOWJS_FLAGS_PREFIX in urlParams) {
-                const keyValues = urlParams[TENSORFLOWJS_FLAGS_PREFIX].split(',');
-                keyValues.forEach(keyValue => {
-                    const [key, value] = keyValue.split(':');
-                    this.urlFlags[key] = parseValue(key, value);
-                });
-            }
-        }
-    }
-    function getQueryParams(queryString) {
-        const params = {};
-        queryString.replace(/[?&]([^=?&]+)(?:=([^&]*))?/g, (s, ...t) => {
-            decodeParam(params, t[0], t[1]);
-            return t.join('=');
-        });
-        return params;
-    }
-    function decodeParam(params, name, value) {
-        params[decodeURIComponent(name)] = decodeURIComponent(value || '');
-    }
-    function parseValue(flagName, value) {
-        value = value.toLowerCase();
-        if (value === 'true' || value === 'false') {
-            return value === 'true';
-        }
-        else if (`${+value}` === value) {
-            return +value;
-        }
-        throw new Error(`Could not parse value flag value ${value} for flag ${flagName}.`);
-    }
-    /**
-     * Returns the current environment (a global singleton).
-     *
-     * The environment object contains the evaluated feature values as well as the
-     * active platform.
-     *
-     * @doc {heading: 'Environment'}
-     */
-    function env() {
-        return ENV;
-    }
-    let ENV = null;
-    function setEnvironmentGlobal(environment) {
-        ENV = environment;
-    }
-
-    /**
-     * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    // Note that the identifier globalNameSpace is scoped to this module, but will
-    // always resolve to the same global object regardless of how the module is
-    // resolved.
-    // tslint:disable-next-line:no-any
-    let globalNameSpace;
-    // tslint:disable-next-line:no-any
-    function getGlobalNamespace() {
-        if (globalNameSpace == null) {
-            // tslint:disable-next-line:no-any
-            let ns;
-            if (typeof (window) !== 'undefined') {
-                ns = window;
-            }
-            else if (typeof (global) !== 'undefined') {
-                ns = global;
-            }
-            else if (typeof (process) !== 'undefined') {
-                ns = process;
-            }
-            else if (typeof (self) !== 'undefined') {
-                ns = self;
-            }
-            else {
-                throw new Error('Could not find a global object');
-            }
-            globalNameSpace = ns;
-        }
-        return globalNameSpace;
-    }
-    // tslint:disable-next-line:no-any
-    function getGlobalMap() {
-        const ns = getGlobalNamespace();
-        if (ns._tfGlobals == null) {
-            ns._tfGlobals = new Map();
-        }
-        return ns._tfGlobals;
-    }
-    /**
-     * Returns a globally accessible 'singleton' object.
-     *
-     * @param key the name of the object
-     * @param init a function to initialize to initialize this object
-     *             the first time it is fetched.
-     */
-    function getGlobal(key, init) {
-        const globalMap = getGlobalMap();
-        if (globalMap.has(key)) {
-            return globalMap.get(key);
-        }
-        else {
-            const singleton = init();
-            globalMap.set(key, singleton);
-            return globalMap.get(key);
-        }
-    }
-
-    const Abs = 'Abs';
-    const Acos = 'Acos';
-    const Acosh = 'Acosh';
-    const Add = 'Add';
-    const AddN = 'AddN';
-    const All = 'All';
-    const Any = 'Any';
-    const ArgMax = 'ArgMax';
-    const ArgMin = 'ArgMin';
-    const Asin = 'Asin';
-    const Asinh = 'Asinh';
-    const Atan = 'Atan';
-    const Atanh = 'Atanh';
-    const Atan2 = 'Atan2';
-    const AvgPool = 'AvgPool';
-    const AvgPoolBackprop = 'AvgPoolBackprop';
-    const AvgPool3D = 'AvgPool3D';
-    const AvgPool3DBackprop = 'AvgPool3DBackprop';
-    const BatchMatMul = 'BatchMatMul';
-    const BatchToSpaceND = 'BatchToSpaceND';
-    const BroadcastTo = 'BroadcastTo';
-    const Cast = 'Cast';
-    const Ceil = 'Ceil';
-    const ClipByValue = 'ClipByValue';
-    const Complex = 'Complex';
-    const Concat = 'Concat';
-    const Conv2D = 'Conv2D';
-    const Conv2DBackpropFilter = 'Conv2DBackpropFilter';
-    const Conv2DBackpropInput = 'Conv2DBackpropInput';
-    const Conv3D = 'Conv3D';
-    const Conv3DBackpropFilterV2 = 'Conv3DBackpropFilterV2';
-    const Conv3DBackpropInputV2 = 'Conv3DBackpropInputV2';
-    const Cos = 'Cos';
-    const Cosh = 'Cosh';
-    const Cumsum = 'Cumsum';
-    const CropAndResize = 'CropAndResize';
-    const DepthToSpace = 'DepthToSpace';
-    const DepthwiseConv2dNative = 'DepthwiseConv2dNative';
-    const DepthwiseConv2dNativeBackpropFilter = 'DepthwiseConv2dNativeBackpropFilter';
-    const DepthwiseConv2dNativeBackpropInput = 'DepthwiseConv2dNativeBackpropInput';
-    const Dilation2D = 'Dilation2D';
-    const Dilation2DBackpropInput = 'Dilation2DBackpropInput';
-    const Dilation2DBackpropFilter = 'Dilation2DBackpropFilter';
-    const Div = 'Div';
-    const Elu = 'Elu';
-    const EluGrad = 'EluGrad';
-    const Erf = 'Erf';
-    const Equal = 'Equal';
-    const Exp = 'Exp';
-    const Expm1 = 'Expm1';
-    const FFT = 'FFT';
-    const Fill = 'Fill';
-    const FlipLeftRight = 'FlipLeftRight';
-    const Floor = 'Floor';
-    const FloorDiv = 'FloorDiv';
-    const FusedBatchNorm = 'FusedBatchNorm';
-    const GatherV2 = 'GatherV2';
-    const GatherNd = 'GatherNd';
-    const Greater = 'Greater';
-    const GreaterEqual = 'GreaterEqual';
-    const Identity = 'Identity';
-    const IFFT = 'IFFT';
-    const Imag = 'Imag';
-    const IsFinite = 'IsFinite';
-    const IsInf = 'IsInf';
-    const IsNan = 'IsNan';
-    const Less = 'Less';
-    const LessEqual = 'LessEqual';
-    const LinSpace = 'LinSpace';
-    const Log = 'Log';
-    const Log1p = 'Log1p';
-    const LogicalAnd = 'LogicalAnd';
-    const LogicalNot = 'LogicalNot';
-    const LogicalOr = 'LogicalOr';
-    const LogSoftmax = 'LogSoftmax';
-    const LRN = 'LRN';
-    const LRNBackprop = 'LRNBackprop';
-    const Max = 'Max';
-    const Maximum = 'Maximum';
-    const MaxPool = 'MaxPool';
-    const MaxPoolBackprop = 'MaxPoolBackprop';
-    const MaxPool3D = 'MaxPool3D';
-    const MaxPool3DBackprop = 'MaxPool3DBackprop';
-    const MaxPoolWithArgmax = 'MaxPoolWithArgmax';
-    const Min = 'Min';
-    const Minimum = 'Minimum';
-    const Mod = 'Mod';
-    const Multiply = 'Multiply';
-    const Negate = 'Negate';
-    const NotEqual = 'NotEqual';
-    const NonMaxSuppressionV3 = 'NonMaxSuppressionV3';
-    const NonMaxSuppressionV4 = 'NonMaxSuppressionV4';
-    const NonMaxSuppressionV5 = 'NonMaxSuppressionV5';
-    const OnesLike = 'OnesLike';
-    const OneHot = 'OneHot';
-    const PadV2 = 'PadV2';
-    const Pow = 'Pow';
-    const Prelu = 'Prelu';
-    const Prod = 'Prod';
-    const Range = 'Range';
-    const Real = 'Real';
-    const Reciprocal = 'Reciprocal';
-    const Relu = 'Relu';
-    const Reshape = 'Reshape';
-    const ResizeNearestNeighbor = 'ResizeNearestNeighbor';
-    const ResizeNearestNeighborGrad = 'ResizeNearestNeighborGrad';
-    const ResizeBilinear = 'ResizeBilinear';
-    const ResizeBilinearGrad = 'ResizeBilinearGrad';
-    const Relu6 = 'Relu6';
-    const Reverse = 'Reverse';
-    const Round = 'Round';
-    const Rsqrt = 'Rsqrt';
-    const ScatterNd = 'ScatterNd';
-    const SelectV2 = 'SelectV2';
-    const Selu = 'Selu';
-    const Slice = 'Slice';
-    const Sin = 'Sin';
-    const Sinh = 'Sinh';
-    const Sign = 'Sign';
-    const Sigmoid = 'Sigmoid';
-    const Softplus = 'Softplus';
-    const Sqrt = 'Sqrt';
-    const Sum = 'Sum';
-    const SpaceToBatchND = 'SpaceToBatchND';
-    const SplitV = 'SplitV';
-    const Softmax = 'Softmax';
-    const SquaredDifference = 'SquaredDifference';
-    const Square = 'Square';
-    const Sub = 'Sub';
-    const SparseToDense = 'SparseToDense';
-    const StridedSlice = 'StridedSlice';
-    const Tan = 'Tan';
-    const Tanh = 'Tanh';
-    const Tile = 'Tile';
-    const TopK = 'TopK';
-    const Transpose = 'Transpose';
-    const Unique = 'Unique';
-    const Unpack = 'Unpack';
-    const UnsortedSegmentSum = 'UnsortedSegmentSum';
-    const ZerosLike = 'ZerosLike';
-    /**
-     * TensorFlow.js-only kernels
-     */
-    const Step = 'Step';
-    const FromPixels = 'FromPixels';
-    const RotateWithOffset = 'RotateWithOffset';
-    const _FusedMatMul = '_FusedMatMul';
-    const FusedConv2D = 'FusedConv2D';
-    const FusedDepthwiseConv2D = 'FusedDepthwiseConv2D';
-
-    /**
-     * @license
-     * Copyright 2019 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    const kernelRegistry = getGlobal('kernelRegistry', () => new Map());
-    const gradRegistry = getGlobal('gradRegistry', () => new Map());
-    /**
-     * Returns the kernel function (code) associated with the provided names.
-     *
-     * @param kernelName The official name of the kernel.
-     * @param backendName The official name of the backend.
-     */
-    function getKernel(kernelName, backendName) {
-        const key = makeKey(kernelName, backendName);
-        return kernelRegistry.get(key);
-    }
-    /**
-     * Returns the registered gradient info associated with the provided kernel.
-     * @param kernelName The official TF kernel name.
-     */
-    function getGradient(kernelName) {
-        return gradRegistry.get(kernelName);
-    }
-    function getKernelsForBackend(backendName) {
-        const it = kernelRegistry.entries();
-        const result = [];
-        while (true) {
-            const { done, value } = it.next();
-            if (done) {
-                break;
-            }
-            const [key, config] = value;
-            const [backend,] = key.split('_');
-            if (backend === backendName) {
-                result.push(config);
-            }
-        }
-        return result;
-    }
-    /**
-     * Registers the function (forward pass) for the kernel in a global registry.
-     *
-     * @param config A config object with the following properties:
-     * - `kernelName` The official name of the kernel.
-     * - `backendName` The official name of the backend.
-     * - `kernelFunc` The function to run during the forward pass of the kernel.
-     * - `setupFunc` Optional. Gets called once, after the backend initializes.
-     * - `disposeFunc` Optional. Gets called once, right before the backend is
-     * disposed.
-     */
-    function registerKernel(config) {
-        const { kernelName, backendName } = config;
-        const key = makeKey(kernelName, backendName);
-        if (kernelRegistry.has(key)) {
-            console.warn(`The kernel '${kernelName}' for backend ` +
-                `'${backendName}' is already registered`);
-        }
-        kernelRegistry.set(key, config);
-    }
-    /**
-     * Registers a gradient function for a given kernel in the global registry,
-     * to be used during the back-propagation of that kernel.
-     *
-     * @param config An object with the following properties:
-     * - `kernelName` The name of the kernel that the gradient function is for.
-     * - `gradFunc` The function to run during back-propagation.
-     */
-    function registerGradient(config) {
-        const { kernelName } = config;
-        if (gradRegistry.has(kernelName)) {
-            // TODO (yassogba) after 3.0 assess whether we need to keep this gated
-            // to debug mode.
-            if (env().getBool('DEBUG')) {
-                console.warn(`Overriding the gradient for '${kernelName}'`);
-            }
-        }
-        gradRegistry.set(kernelName, config);
-    }
-    function makeKey(kernelName, backendName) {
-        return `${backendName}_${kernelName}`;
-    }
-
-    /**
-     * @license
-     * Copyright 2017 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -1706,47 +1230,6 @@
         }
         return strides;
     }
-    /**
-     * Create typed array for scalar value. Used for storing in `DataStorage`.
-     */
-    function createScalarValue(value, dtype) {
-        if (dtype === 'string') {
-            return encodeString(value);
-        }
-        return toTypedArray([value], dtype);
-    }
-    function toTypedArray(a, dtype) {
-        if (dtype === 'string') {
-            throw new Error('Cannot convert a string[] to a TypedArray');
-        }
-        if (Array.isArray(a)) {
-            a = flatten(a);
-        }
-        if (env().getBool('DEBUG')) {
-            checkConversionForErrors(a, dtype);
-        }
-        if (noConversionNeeded(a, dtype)) {
-            return a;
-        }
-        if (dtype == null || dtype === 'float32' || dtype === 'complex64') {
-            return new Float32Array(a);
-        }
-        else if (dtype === 'int32') {
-            return new Int32Array(a);
-        }
-        else if (dtype === 'bool') {
-            const bool = new Uint8Array(a.length);
-            for (let i = 0; i < bool.length; ++i) {
-                if (Math.round(a[i]) !== 0) {
-                    bool[i] = 1;
-                }
-            }
-            return bool;
-        }
-        else {
-            throw new Error(`Unknown data type ${dtype}`);
-        }
-    }
     function createNestedArray(offset, shape, a) {
         const ret = new Array();
         if (shape.length === 1) {
@@ -1780,11 +1263,6 @@
             throw new Error(`[${shape}] does not match the input size ${a.length}.`);
         }
         return createNestedArray(0, shape, a);
-    }
-    function noConversionNeeded(a, dtype) {
-        return (a instanceof Float32Array && dtype === 'float32') ||
-            (a instanceof Int32Array && dtype === 'int32') ||
-            (a instanceof Uint8Array && dtype === 'bool');
     }
     function makeOnesTypedArray(size, dtype) {
         const array = makeZerosTypedArray(size, dtype);
@@ -1827,49 +1305,11 @@
             throw new Error(`Unknown data type ${dtype}`);
         }
     }
-    /**
-     * Returns the current high-resolution time in milliseconds relative to an
-     * arbitrary time in the past. It works across different platforms (node.js,
-     * browsers).
-     *
-     * ```js
-     * console.log(tf.util.now());
-     * ```
-     *
-     * @doc {heading: 'Util', namespace: 'util'}
-     */
-    function now() {
-        return env().platform.now();
-    }
     function assertNonNegativeIntegerDimensions(shape) {
         shape.forEach(dimSize => {
             assert(Number.isInteger(dimSize) && dimSize >= 0, () => `Tensor must have a shape comprised of positive integers but got ` +
                 `shape [${shape}].`);
         });
-    }
-    /**
-     * Encodes the provided string into bytes using the provided encoding scheme.
-     *
-     * @param s The string to encode.
-     * @param encoding The encoding scheme. Defaults to utf-8.
-     *
-     * @doc {heading: 'Util'}
-     */
-    function encodeString(s, encoding = 'utf-8') {
-        encoding = encoding || 'utf-8';
-        return env().platform.encode(s, encoding);
-    }
-    /**
-     * Decodes the provided bytes into a string using the provided encoding scheme.
-     * @param bytes The bytes to decode.
-     *
-     * @param encoding The encoding scheme. Defaults to utf-8.
-     *
-     * @doc {heading: 'Util'}
-     */
-    function decodeString(bytes, encoding = 'utf-8') {
-        encoding = encoding || 'utf-8';
-        return env().platform.decode(bytes, encoding);
     }
     /**
      * Computes flat index for a given location (multidimentionsal index) in a
@@ -1914,6 +1354,599 @@
         }
         locs[locs.length - 1] = index;
         return locs;
+    }
+    /**
+     * This method asserts whether an object is a Promise instance.
+     * @param object
+     */
+    // tslint:disable-next-line: no-any
+    function isPromise(object) {
+        //  We chose to not use 'obj instanceOf Promise' for two reasons:
+        //  1. It only reliably works for es6 Promise, not other Promise
+        //  implementations.
+        //  2. It doesn't work with framework that uses zone.js. zone.js monkey patch
+        //  the async calls, so it is possible the obj (patched) is comparing to a
+        //  pre-patched Promise.
+        return object && object.then && typeof object.then === 'function';
+    }
+
+    /**
+     * @license
+     * Copyright 2017 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    // Expects flags from URL in the format ?tfjsflags=FLAG1:1,FLAG2:true.
+    const TENSORFLOWJS_FLAGS_PREFIX = 'tfjsflags';
+    /**
+     * The environment contains evaluated flags as well as the registered platform.
+     * This is always used as a global singleton and can be retrieved with
+     * `tf.env()`.
+     *
+     * @doc {heading: 'Environment'}
+     */
+    class Environment {
+        // tslint:disable-next-line: no-any
+        constructor(global) {
+            this.global = global;
+            this.flags = {};
+            this.flagRegistry = {};
+            this.urlFlags = {};
+            this.populateURLFlags();
+        }
+        setPlatform(platformName, platform) {
+            if (this.platform != null) {
+                console.warn(`Platform ${this.platformName} has already been set. ` +
+                    `Overwriting the platform with ${platform}.`);
+            }
+            this.platformName = platformName;
+            this.platform = platform;
+        }
+        registerFlag(flagName, evaluationFn, setHook) {
+            this.flagRegistry[flagName] = { evaluationFn, setHook };
+            // Override the flag value from the URL. This has to happen here because the
+            // environment is initialized before flags get registered.
+            if (this.urlFlags[flagName] != null) {
+                const flagValue = this.urlFlags[flagName];
+                console.warn(`Setting feature override from URL ${flagName}: ${flagValue}.`);
+                this.set(flagName, flagValue);
+            }
+        }
+        async getAsync(flagName) {
+            if (flagName in this.flags) {
+                return this.flags[flagName];
+            }
+            this.flags[flagName] = await this.evaluateFlag(flagName);
+            return this.flags[flagName];
+        }
+        get(flagName) {
+            if (flagName in this.flags) {
+                return this.flags[flagName];
+            }
+            const flagValue = this.evaluateFlag(flagName);
+            if (isPromise(flagValue)) {
+                throw new Error(`Flag ${flagName} cannot be synchronously evaluated. ` +
+                    `Please use getAsync() instead.`);
+            }
+            this.flags[flagName] = flagValue;
+            return this.flags[flagName];
+        }
+        getNumber(flagName) {
+            return this.get(flagName);
+        }
+        getBool(flagName) {
+            return this.get(flagName);
+        }
+        getFlags() {
+            return this.flags;
+        }
+        // For backwards compatibility.
+        get features() {
+            return this.flags;
+        }
+        set(flagName, value) {
+            if (this.flagRegistry[flagName] == null) {
+                throw new Error(`Cannot set flag ${flagName} as it has not been registered.`);
+            }
+            this.flags[flagName] = value;
+            if (this.flagRegistry[flagName].setHook != null) {
+                this.flagRegistry[flagName].setHook(value);
+            }
+        }
+        evaluateFlag(flagName) {
+            if (this.flagRegistry[flagName] == null) {
+                throw new Error(`Cannot evaluate flag '${flagName}': no evaluation function found.`);
+            }
+            return this.flagRegistry[flagName].evaluationFn();
+        }
+        setFlags(flags) {
+            this.flags = Object.assign({}, flags);
+        }
+        reset() {
+            this.flags = {};
+            this.urlFlags = {};
+            this.populateURLFlags();
+        }
+        populateURLFlags() {
+            if (typeof this.global === 'undefined' ||
+                typeof this.global.location === 'undefined' ||
+                typeof this.global.location.search === 'undefined') {
+                return;
+            }
+            const urlParams = getQueryParams(this.global.location.search);
+            if (TENSORFLOWJS_FLAGS_PREFIX in urlParams) {
+                const keyValues = urlParams[TENSORFLOWJS_FLAGS_PREFIX].split(',');
+                keyValues.forEach(keyValue => {
+                    const [key, value] = keyValue.split(':');
+                    this.urlFlags[key] = parseValue(key, value);
+                });
+            }
+        }
+    }
+    function getQueryParams(queryString) {
+        const params = {};
+        queryString.replace(/[?&]([^=?&]+)(?:=([^&]*))?/g, (s, ...t) => {
+            decodeParam(params, t[0], t[1]);
+            return t.join('=');
+        });
+        return params;
+    }
+    function decodeParam(params, name, value) {
+        params[decodeURIComponent(name)] = decodeURIComponent(value || '');
+    }
+    function parseValue(flagName, value) {
+        value = value.toLowerCase();
+        if (value === 'true' || value === 'false') {
+            return value === 'true';
+        }
+        else if (`${+value}` === value) {
+            return +value;
+        }
+        throw new Error(`Could not parse value flag value ${value} for flag ${flagName}.`);
+    }
+    /**
+     * Returns the current environment (a global singleton).
+     *
+     * The environment object contains the evaluated feature values as well as the
+     * active platform.
+     *
+     * @doc {heading: 'Environment'}
+     */
+    function env() {
+        return ENV;
+    }
+    let ENV = null;
+    function setEnvironmentGlobal(environment) {
+        ENV = environment;
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    // Note that the identifier globalNameSpace is scoped to this module, but will
+    // always resolve to the same global object regardless of how the module is
+    // resolved.
+    // tslint:disable-next-line:no-any
+    let globalNameSpace;
+    // tslint:disable-next-line:no-any
+    function getGlobalNamespace() {
+        if (globalNameSpace == null) {
+            // tslint:disable-next-line:no-any
+            let ns;
+            if (typeof (window) !== 'undefined') {
+                ns = window;
+            }
+            else if (typeof (global) !== 'undefined') {
+                ns = global;
+            }
+            else if (typeof (process) !== 'undefined') {
+                ns = process;
+            }
+            else if (typeof (self) !== 'undefined') {
+                ns = self;
+            }
+            else {
+                throw new Error('Could not find a global object');
+            }
+            globalNameSpace = ns;
+        }
+        return globalNameSpace;
+    }
+    // tslint:disable-next-line:no-any
+    function getGlobalMap() {
+        const ns = getGlobalNamespace();
+        if (ns._tfGlobals == null) {
+            ns._tfGlobals = new Map();
+        }
+        return ns._tfGlobals;
+    }
+    /**
+     * Returns a globally accessible 'singleton' object.
+     *
+     * @param key the name of the object
+     * @param init a function to initialize to initialize this object
+     *             the first time it is fetched.
+     */
+    function getGlobal(key, init) {
+        const globalMap = getGlobalMap();
+        if (globalMap.has(key)) {
+            return globalMap.get(key);
+        }
+        else {
+            const singleton = init();
+            globalMap.set(key, singleton);
+            return globalMap.get(key);
+        }
+    }
+
+    const Abs = 'Abs';
+    const Acos = 'Acos';
+    const Acosh = 'Acosh';
+    const Add = 'Add';
+    const AddN = 'AddN';
+    const All = 'All';
+    const Any = 'Any';
+    const ArgMax = 'ArgMax';
+    const ArgMin = 'ArgMin';
+    const Asin = 'Asin';
+    const Asinh = 'Asinh';
+    const Atan = 'Atan';
+    const Atanh = 'Atanh';
+    const Atan2 = 'Atan2';
+    const AvgPool = 'AvgPool';
+    const AvgPoolBackprop = 'AvgPoolBackprop';
+    const AvgPool3D = 'AvgPool3D';
+    const AvgPool3DBackprop = 'AvgPool3DBackprop';
+    const BatchMatMul = 'BatchMatMul';
+    const BatchToSpaceND = 'BatchToSpaceND';
+    const BroadcastTo = 'BroadcastTo';
+    const Cast = 'Cast';
+    const Ceil = 'Ceil';
+    const ClipByValue = 'ClipByValue';
+    const Complex = 'Complex';
+    const Concat = 'Concat';
+    const Conv2D = 'Conv2D';
+    const Conv2DBackpropFilter = 'Conv2DBackpropFilter';
+    const Conv2DBackpropInput = 'Conv2DBackpropInput';
+    const Conv3D = 'Conv3D';
+    const Conv3DBackpropFilterV2 = 'Conv3DBackpropFilterV2';
+    const Conv3DBackpropInputV2 = 'Conv3DBackpropInputV2';
+    const Cos = 'Cos';
+    const Cosh = 'Cosh';
+    const Cumsum = 'Cumsum';
+    const CropAndResize = 'CropAndResize';
+    const DepthToSpace = 'DepthToSpace';
+    const DepthwiseConv2dNative = 'DepthwiseConv2dNative';
+    const DepthwiseConv2dNativeBackpropFilter = 'DepthwiseConv2dNativeBackpropFilter';
+    const DepthwiseConv2dNativeBackpropInput = 'DepthwiseConv2dNativeBackpropInput';
+    const Dilation2D = 'Dilation2D';
+    const Dilation2DBackpropInput = 'Dilation2DBackpropInput';
+    const Dilation2DBackpropFilter = 'Dilation2DBackpropFilter';
+    const Div = 'Div';
+    const Elu = 'Elu';
+    const EluGrad = 'EluGrad';
+    const Erf = 'Erf';
+    const Equal = 'Equal';
+    const Exp = 'Exp';
+    const Expm1 = 'Expm1';
+    const FFT = 'FFT';
+    const Fill = 'Fill';
+    const FlipLeftRight = 'FlipLeftRight';
+    const Floor = 'Floor';
+    const FloorDiv = 'FloorDiv';
+    const FusedBatchNorm = 'FusedBatchNorm';
+    const GatherV2 = 'GatherV2';
+    const GatherNd = 'GatherNd';
+    const Greater = 'Greater';
+    const GreaterEqual = 'GreaterEqual';
+    const Identity = 'Identity';
+    const IFFT = 'IFFT';
+    const Imag = 'Imag';
+    const IsFinite = 'IsFinite';
+    const IsInf = 'IsInf';
+    const IsNan = 'IsNan';
+    const Less = 'Less';
+    const LessEqual = 'LessEqual';
+    const LinSpace = 'LinSpace';
+    const Log = 'Log';
+    const Log1p = 'Log1p';
+    const LogicalAnd = 'LogicalAnd';
+    const LogicalNot = 'LogicalNot';
+    const LogicalOr = 'LogicalOr';
+    const LogSoftmax = 'LogSoftmax';
+    const LRN = 'LRN';
+    const LRNBackprop = 'LRNBackprop';
+    const Max = 'Max';
+    const Maximum = 'Maximum';
+    const MaxPool = 'MaxPool';
+    const MaxPoolBackprop = 'MaxPoolBackprop';
+    const MaxPool3D = 'MaxPool3D';
+    const MaxPool3DBackprop = 'MaxPool3DBackprop';
+    const MaxPoolWithArgmax = 'MaxPoolWithArgmax';
+    const Mean = 'Mean';
+    const Min = 'Min';
+    const Minimum = 'Minimum';
+    const MirrorPad = 'MirrorPad';
+    const Mod = 'Mod';
+    const Multiply = 'Multiply';
+    const Negate = 'Negate';
+    const NotEqual = 'NotEqual';
+    const NonMaxSuppressionV3 = 'NonMaxSuppressionV3';
+    const NonMaxSuppressionV4 = 'NonMaxSuppressionV4';
+    const NonMaxSuppressionV5 = 'NonMaxSuppressionV5';
+    const OnesLike = 'OnesLike';
+    const OneHot = 'OneHot';
+    const PadV2 = 'PadV2';
+    const Pow = 'Pow';
+    const Prelu = 'Prelu';
+    const Prod = 'Prod';
+    const Range = 'Range';
+    const Real = 'Real';
+    const Reciprocal = 'Reciprocal';
+    const Relu = 'Relu';
+    const Reshape = 'Reshape';
+    const ResizeNearestNeighbor = 'ResizeNearestNeighbor';
+    const ResizeNearestNeighborGrad = 'ResizeNearestNeighborGrad';
+    const ResizeBilinear = 'ResizeBilinear';
+    const ResizeBilinearGrad = 'ResizeBilinearGrad';
+    const Relu6 = 'Relu6';
+    const Reverse = 'Reverse';
+    const Round = 'Round';
+    const Rsqrt = 'Rsqrt';
+    const ScatterNd = 'ScatterNd';
+    const SelectV2 = 'SelectV2';
+    const Selu = 'Selu';
+    const Slice = 'Slice';
+    const Sin = 'Sin';
+    const Sinh = 'Sinh';
+    const Sign = 'Sign';
+    const Sigmoid = 'Sigmoid';
+    const Softplus = 'Softplus';
+    const Sqrt = 'Sqrt';
+    const Sum = 'Sum';
+    const SpaceToBatchND = 'SpaceToBatchND';
+    const SplitV = 'SplitV';
+    const Softmax = 'Softmax';
+    const SquaredDifference = 'SquaredDifference';
+    const Square = 'Square';
+    const Sub = 'Sub';
+    const SparseToDense = 'SparseToDense';
+    const StridedSlice = 'StridedSlice';
+    const Tan = 'Tan';
+    const Tanh = 'Tanh';
+    const Tile = 'Tile';
+    const TopK = 'TopK';
+    const Transpose = 'Transpose';
+    const Unique = 'Unique';
+    const Unpack = 'Unpack';
+    const UnsortedSegmentSum = 'UnsortedSegmentSum';
+    const ZerosLike = 'ZerosLike';
+    /**
+     * TensorFlow.js-only kernels
+     */
+    const Step = 'Step';
+    const FromPixels = 'FromPixels';
+    const RotateWithOffset = 'RotateWithOffset';
+    const _FusedMatMul = '_FusedMatMul';
+    const FusedConv2D = 'FusedConv2D';
+    const FusedDepthwiseConv2D = 'FusedDepthwiseConv2D';
+
+    /**
+     * @license
+     * Copyright 2019 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const kernelRegistry = getGlobal('kernelRegistry', () => new Map());
+    const gradRegistry = getGlobal('gradRegistry', () => new Map());
+    /**
+     * Returns the kernel function (code) associated with the provided names.
+     *
+     * @param kernelName The official name of the kernel.
+     * @param backendName The official name of the backend.
+     */
+    function getKernel(kernelName, backendName) {
+        const key = makeKey(kernelName, backendName);
+        return kernelRegistry.get(key);
+    }
+    /**
+     * Returns the registered gradient info associated with the provided kernel.
+     * @param kernelName The official TF kernel name.
+     */
+    function getGradient(kernelName) {
+        return gradRegistry.get(kernelName);
+    }
+    function getKernelsForBackend(backendName) {
+        const it = kernelRegistry.entries();
+        const result = [];
+        while (true) {
+            const { done, value } = it.next();
+            if (done) {
+                break;
+            }
+            const [key, config] = value;
+            const [backend,] = key.split('_');
+            if (backend === backendName) {
+                result.push(config);
+            }
+        }
+        return result;
+    }
+    /**
+     * Registers the function (forward pass) for the kernel in a global registry.
+     *
+     * @param config A config object with the following properties:
+     * - `kernelName` The official name of the kernel.
+     * - `backendName` The official name of the backend.
+     * - `kernelFunc` The function to run during the forward pass of the kernel.
+     * - `setupFunc` Optional. Gets called once, after the backend initializes.
+     * - `disposeFunc` Optional. Gets called once, right before the backend is
+     * disposed.
+     */
+    function registerKernel(config) {
+        const { kernelName, backendName } = config;
+        const key = makeKey(kernelName, backendName);
+        if (kernelRegistry.has(key)) {
+            console.warn(`The kernel '${kernelName}' for backend ` +
+                `'${backendName}' is already registered`);
+        }
+        kernelRegistry.set(key, config);
+    }
+    /**
+     * Registers a gradient function for a given kernel in the global registry,
+     * to be used during the back-propagation of that kernel.
+     *
+     * @param config An object with the following properties:
+     * - `kernelName` The name of the kernel that the gradient function is for.
+     * - `gradFunc` The function to run during back-propagation.
+     */
+    function registerGradient(config) {
+        const { kernelName } = config;
+        if (gradRegistry.has(kernelName)) {
+            // TODO (yassogba) after 3.0 assess whether we need to keep this gated
+            // to debug mode.
+            if (env().getBool('DEBUG')) {
+                console.warn(`Overriding the gradient for '${kernelName}'`);
+            }
+        }
+        gradRegistry.set(kernelName, config);
+    }
+    function makeKey(kernelName, backendName) {
+        return `${backendName}_${kernelName}`;
+    }
+
+    /**
+     * @license
+     * Copyright 2017 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Create typed array for scalar value. Used for storing in `DataStorage`.
+     */
+    function createScalarValue(value, dtype) {
+        if (dtype === 'string') {
+            return encodeString(value);
+        }
+        return toTypedArray([value], dtype);
+    }
+    function noConversionNeeded(a, dtype) {
+        return (a instanceof Float32Array && dtype === 'float32') ||
+            (a instanceof Int32Array && dtype === 'int32') ||
+            (a instanceof Uint8Array && dtype === 'bool');
+    }
+    function toTypedArray(a, dtype) {
+        if (dtype === 'string') {
+            throw new Error('Cannot convert a string[] to a TypedArray');
+        }
+        if (Array.isArray(a)) {
+            a = flatten(a);
+        }
+        if (env().getBool('DEBUG')) {
+            checkConversionForErrors(a, dtype);
+        }
+        if (noConversionNeeded(a, dtype)) {
+            return a;
+        }
+        if (dtype == null || dtype === 'float32' || dtype === 'complex64') {
+            return new Float32Array(a);
+        }
+        else if (dtype === 'int32') {
+            return new Int32Array(a);
+        }
+        else if (dtype === 'bool') {
+            const bool = new Uint8Array(a.length);
+            for (let i = 0; i < bool.length; ++i) {
+                if (Math.round(a[i]) !== 0) {
+                    bool[i] = 1;
+                }
+            }
+            return bool;
+        }
+        else {
+            throw new Error(`Unknown data type ${dtype}`);
+        }
+    }
+    /**
+     * Returns the current high-resolution time in milliseconds relative to an
+     * arbitrary time in the past. It works across different platforms (node.js,
+     * browsers).
+     *
+     * ```js
+     * console.log(tf.util.now());
+     * ```
+     *
+     * @doc {heading: 'Util', namespace: 'util'}
+     */
+    function now() {
+        return env().platform.now();
+    }
+    /**
+     * Encodes the provided string into bytes using the provided encoding scheme.
+     *
+     * @param s The string to encode.
+     * @param encoding The encoding scheme. Defaults to utf-8.
+     *
+     * @doc {heading: 'Util'}
+     */
+    function encodeString(s, encoding = 'utf-8') {
+        encoding = encoding || 'utf-8';
+        return env().platform.encode(s, encoding);
+    }
+    /**
+     * Decodes the provided bytes into a string using the provided encoding scheme.
+     * @param bytes The bytes to decode.
+     *
+     * @param encoding The encoding scheme. Defaults to utf-8.
+     *
+     * @doc {heading: 'Util'}
+     */
+    function decodeString(bytes, encoding = 'utf-8') {
+        encoding = encoding || 'utf-8';
+        return env().platform.decode(bytes, encoding);
     }
 
     /**
@@ -4010,7 +4043,7 @@
             ENGINE.startScope(opName);
             try {
                 const result = fn(...args);
-                if (result instanceof Promise) {
+                if (isPromise(result)) {
                     console.error('Cannot return a Promise inside of tidy.');
                 }
                 ENGINE.endScope(result);
@@ -4411,6 +4444,8 @@
                     const realTensor = tensor(real, shape, 'float32');
                     const imageTensor = tensor(image, shape, 'float32');
                     out[name] = complex(realTensor, imageTensor);
+                    realTensor.dispose();
+                    imageTensor.dispose();
                 }
                 else {
                     throw new Error(`Unsupported dtype in weight '${name}': ${dtype}`);
@@ -6143,36 +6178,38 @@
         let $a = convertToTensor(a, 'a', 'matMul');
         let $b = convertToTensor(b, 'b', 'matMul');
         [$a, $b] = makeTypesMatch($a, $b);
-        assert($a.rank >= 2 && $b.rank >= 2 && $a.rank === $b.rank, () => `Error in matMul: inputs must have the same rank of at least 2, ` +
-            `got ranks ${$a.rank} and ${$b.rank}.`);
-        const innerShapeA = transposeA ? $a.shape[$a.rank - 2] : $a.shape[$a.rank - 1];
-        const innerShapeB = transposeB ? $b.shape[$b.rank - 1] : $b.shape[$b.rank - 2];
-        const outerShapeA = transposeA ? $a.shape[$a.rank - 1] : $a.shape[$a.rank - 2];
-        const outerShapeB = transposeB ? $b.shape[$b.rank - 2] : $b.shape[$b.rank - 1];
-        const outerDimsA = $a.shape.slice(0, -2);
-        const outerDimsB = $b.shape.slice(0, -2);
-        const batchDimA = sizeFromShape(outerDimsA);
-        const batchDimB = sizeFromShape(outerDimsB);
-        assert(arraysEqual(outerDimsA, outerDimsB), () => `Error in matMul: outer dimensions (${outerDimsA}) and (` +
-            `${outerDimsB}) of Tensors with shapes ${$a.shape} and ` +
-            `${$b.shape} must match.`);
-        assert(innerShapeA === innerShapeB, () => `Error in matMul: inner shapes (${innerShapeA}) and (` +
-            `${innerShapeB}) of Tensors with shapes ${$a.shape} and ` +
-            `${$b.shape} and transposeA=${transposeA}` +
-            ` and transposeB=${transposeB} must match.`);
-        const outShape = $a.shape.slice(0, -2).concat([outerShapeA, outerShapeB]);
-        const a3D = transposeA ? reshape($a, [batchDimA, innerShapeA, outerShapeA]) :
-            reshape($a, [batchDimA, outerShapeA, innerShapeA]);
-        const b3D = transposeB ? reshape($b, [batchDimB, outerShapeB, innerShapeB]) :
-            reshape($b, [batchDimB, innerShapeB, outerShapeB]);
         const forward = (backend, save) => {
-            save([a3D, b3D]);
-            return backend.batchMatMul(a3D, b3D, transposeA, transposeB);
+            save([$a, $b]);
+            const innerShapeA = transposeA ? $a.shape[$a.rank - 2] : $a.shape[$a.rank - 1];
+            const innerShapeB = transposeB ? $b.shape[$b.rank - 1] : $b.shape[$b.rank - 2];
+            const outerShapeA = transposeA ? $a.shape[$a.rank - 1] : $a.shape[$a.rank - 2];
+            const outerShapeB = transposeB ? $b.shape[$b.rank - 2] : $b.shape[$b.rank - 1];
+            const outerDimsA = $a.shape.slice(0, -2);
+            const outerDimsB = $b.shape.slice(0, -2);
+            const batchDimA = sizeFromShape(outerDimsA);
+            const batchDimB = sizeFromShape(outerDimsB);
+            const batchDimsCompatible = batchDimA === batchDimB || batchDimA === 1 || batchDimB === 1;
+            assert($a.rank >= 2 && $b.rank >= 2 && batchDimsCompatible, () => `Error in matMul: the input batch dimensions must either be the ` +
+                `same or at least one input batch dimension must be 1. Got input ` +
+                `batch dimensions of (${outerDimsA}) and (${outerDimsB}).`);
+            assert(innerShapeA === innerShapeB, () => `Error in matMul: inner shapes (${innerShapeA}) and (` +
+                `${innerShapeB}) of Tensors with shapes ${$a.shape} and ` +
+                `${$b.shape} and transposeA=${transposeA}` +
+                ` and transposeB=${transposeB} must match.`);
+            const outShapeOuterDims = batchDimA > batchDimB ? outerDimsA : outerDimsB;
+            const outShape = outShapeOuterDims.concat([outerShapeA, outerShapeB]);
+            const a3D = transposeA ?
+                reshape($a, [batchDimA, innerShapeA, outerShapeA]) :
+                reshape($a, [batchDimA, outerShapeA, innerShapeA]);
+            const b3D = transposeB ?
+                reshape($b, [batchDimB, outerShapeB, innerShapeB]) :
+                reshape($b, [batchDimB, innerShapeB, outerShapeB]);
+            const res3d = backend.batchMatMul(a3D, b3D, transposeA, transposeB);
+            return reshape(res3d, outShape);
         };
-        const inputs = { a: a3D, b: b3D };
+        const inputs = { a: $a, b: $b };
         const attrs = { transposeA, transposeB };
-        const res = ENGINE.runKernelFunc(forward, inputs, null /* grad */, BatchMatMul, attrs);
-        return reshape(res, outShape);
+        return ENGINE.runKernelFunc(forward, inputs, null /* grad */, BatchMatMul, attrs);
     }
     const matMul = op({ matMul_ });
 
@@ -9811,8 +9848,8 @@
             const convInfo = computeConv3DInfo(xShape5D, filter.shape, strides, dilations, pad);
             return backend.conv3dDerInput(dy5D, filter, convInfo);
         };
-        const inputs = { dy: dy5D };
-        const attrs = { pad };
+        const inputs = { dy: dy5D, filter };
+        const attrs = { pad, strides, inputShape: xShape5D };
         const res = ENGINE.runKernelFunc(forward, inputs, null, Conv3DBackpropInputV2, attrs);
         if (reshapedTo5D) {
             return reshape(res, [res.shape[1], res.shape[2], res.shape[3], res.shape[4]]);
@@ -12871,16 +12908,21 @@
         const shapes = computeOutAndReduceShapes($x.shape, axes);
         const reduceShape = shapes[1];
         const reduceSize = sizeFromShape(reduceShape);
+        const inputs = { x: $x };
+        const attrs = { axis, keepDims };
+        const forward = () => {
+            const reduceSizeScalar = scalar(reduceSize);
+            // Cast if needed.
+            const xReduce = reduceSizeScalar.dtype === $x.dtype ?
+                $x :
+                cast($x, reduceSizeScalar.dtype);
+            const res = div(xReduce, reduceSizeScalar);
+            return sum$1(res, axis, keepDims);
+        };
         // Use a custom gradient to bypass 2 gradient backprops since mean is used
         // extremely often.
         const customOp = customGrad((x) => {
-            const reduceSizeScalar = scalar(reduceSize);
-            // Cast if needed.
-            const xReduce = reduceSizeScalar.dtype === x.dtype ?
-                x :
-                cast(x, reduceSizeScalar.dtype);
-            const res = div(xReduce, reduceSizeScalar);
-            const value = sum$1(res, axis, keepDims);
+            const value = ENGINE.runKernelFunc(forward, inputs, null /* grad */, Mean, attrs);
             const gradFunc = (dy) => {
                 const expandedDyShape = x.shape.slice();
                 axes.forEach(axis => {
@@ -13016,6 +13058,71 @@
         return ENGINE.runKernelFunc(forward, inputs, null /* gradient */, Minimum);
     }
     const minimum = op({ minimum_ });
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Pads a `tf.Tensor` using mirror padding.
+     *
+     * This operation implements the `REFLECT` and `SYMMETRIC` modes of pad.
+     *
+     * ```js
+     * const x = tf.range(0, 9).reshape([1, 1, 3, 3]);
+     * x.mirrorPad([[0, 0], [0, 0], [2, 2], [2, 2]], 'reflect').print();
+     * ```
+     * @param x The tensor to pad.
+     * @param paddings An array of length `R` (the rank of the tensor), where
+     * each element is a length-2 tuple of ints `[padBefore, padAfter]`,
+     * specifying how much to pad along each dimension of the tensor.
+     * In "reflect" mode, the padded regions do not include the borders,
+     * while in "symmetric" mode the padded regions do include the borders.
+     * For example, if the input is `[1, 2, 3]` and paddings is `[0, 2]`,
+     * then the output is `[1, 2, 3, 2, 1]` in "reflect" mode, and
+     * `[1, 2, 3, 3, 2]` in "symmetric" mode.
+     * If `mode` is "reflect" then both `paddings[D, 0]` and `paddings[D, 1]`
+     * must be no greater than `x.shape[D] - 1`. If mode is "symmetric"
+     * then both `paddings[D, 0]` and `paddings[D, 1]` must be no greater than
+     * `x.shape[D]`
+     * @param mode String to specify padding mode. Can be `'reflect' | 'symmetric'`
+     */
+    /** @doc {heading: 'Tensors', subheading: 'Transformations'} */
+    function mirrorPad_(x, paddings, mode) {
+        assert(mode === 'reflect' || mode === 'symmetric', () => `Invalid mode. Mode must be either reflect or symmetric. ` +
+            `Got ${mode}.`);
+        const $x = convertToTensor(x, 'x', 'mirrorPad');
+        if ($x.rank === 0) {
+            throw new Error('mirrorPad(scalar) is not defined. ' +
+                'Pass non-scalar to mirrorPad');
+        }
+        assert(paddings.length === $x.rank, () => `Padding doesn't match input. Must be ${$x.rank}. ` +
+            `Got ${paddings.length}.`);
+        const shapeOffset = mode === 'reflect' ? 1 : 0;
+        for (let i = 0; i < $x.rank; i++) {
+            assert(paddings[i].length === 2, () => `Invalid number of paddings. Must be length of 2 each.`);
+            assert(paddings[i][0] >= 0 && paddings[i][0] <= $x.shape[i] - shapeOffset &&
+                paddings[i][1] >= 0 && paddings[i][1] <= $x.shape[i] - shapeOffset, () => `Padding in dimension ${i} cannot be greater than or equal ` +
+                `to ${$x.shape[i] - shapeOffset} or less than 0 for input of ` +
+                `shape ${$x.shape}`);
+        }
+        const attrs = { paddings, mode };
+        const inputs = { x: $x };
+        return ENGINE.runKernel(MirrorPad, inputs, attrs);
+    }
+    const mirrorPad = op({ mirrorPad_ });
 
     /**
      * @license
@@ -13358,7 +13465,8 @@
     /**
      * Pads a `tf.Tensor` with a given value and paddings.
      *
-     * This operation currently only implements the `CONSTANT` mode.
+     * This operation implements `CONSTANT` mode. For `REFLECT` and `SYMMETRIC`,
+     * refer to `tf.mirrorPad`
      *
      * Also available are stricter rank-specific methods with the same signature
      * as this method that assert that `paddings` is of given length.
@@ -13750,10 +13858,11 @@
      */
     function prod_(x, axis = null, keepDims = false) {
         let $x = convertToTensor(x, 'x', 'prod');
+        if ($x.dtype === 'bool') {
+            // bool is not an allowed type for the underlying kernel.
+            $x = cast($x, 'int32');
+        }
         const forward = (backend) => {
-            if ($x.dtype === 'bool') {
-                $x = cast($x, 'int32');
-            }
             const axes = parseAxisParam(axis, $x.shape);
             const permutation = getAxesPermutation(axes, $x.rank);
             let reductionAxes = axes;
@@ -17753,7 +17862,7 @@
             return backend.conv2dDerFilter(x4D, dy4D, convInfo);
         };
         const inputs = { x: x4D, dy: dy4D };
-        const attrs = { strides, pad, dataFormat, dimRoundingMode };
+        const attrs = { strides, pad, dataFormat, dimRoundingMode, filterShape };
         return ENGINE.runKernelFunc(forward, inputs, null, Conv2DBackpropFilter, attrs);
     }
     const conv2DBackpropFilter = op({ conv2DBackpropFilter_ });
@@ -18006,7 +18115,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    function depthwiseConv2dNativeBackpropFilter_(x, dy, filterShape, convInfo) {
+    function depthwiseConv2dNativeBackpropFilter_(x, dy, filterShape, strides, pad, dilations = [1, 1], dimRoundingMode) {
         let x4D = x;
         if (x.rank === 3) {
             x4D = reshape(x, [1, x.shape[0], x.shape[1], x.shape[2]]);
@@ -18015,9 +18124,13 @@
         if (dy4D.rank === 3) {
             dy4D = reshape(dy, [1, dy.shape[0], dy.shape[1], dy.shape[2]]);
         }
-        const forward = backend => backend.depthwiseConv2DDerFilter(x4D, dy4D, convInfo);
+        const forward = backend => {
+            const convInfo = computeConv2DInfo(x.shape, filterShape, strides, dilations, pad, dimRoundingMode, true /* depthwise */);
+            return backend.depthwiseConv2DDerFilter(x4D, dy4D, convInfo);
+        };
         const inputs = { x: x4D, dy: dy4D };
-        return ENGINE.runKernelFunc(forward, inputs, null, DepthwiseConv2dNativeBackpropFilter);
+        const attrs = { strides, pad, dimRoundingMode, dilations, filterShape };
+        return ENGINE.runKernelFunc(forward, inputs, null, DepthwiseConv2dNativeBackpropFilter, attrs);
     }
     const depthwiseConv2dNativeBackpropFilter = op({ depthwiseConv2dNativeBackpropFilter_ });
 
@@ -18037,16 +18150,20 @@
      * limitations under the License.
      * =============================================================================
      */
-    function depthwiseConv2dNativeBackpropInput_(xShape, dy, filter, convInfo) {
+    function depthwiseConv2dNativeBackpropInput_(xShape, dy, filter, strides, pad, dilations = [1, 1], dimRoundingMode) {
         let dy4D = dy;
         let reshapedTo4D = false;
         if (dy.rank === 3) {
             reshapedTo4D = true;
             dy4D = reshape(dy, [1, dy.shape[0], dy.shape[1], dy.shape[2]]);
         }
-        const forward = backend => backend.depthwiseConv2DDerInput(dy4D, filter, convInfo);
-        const inputs = { dy: dy4D };
-        const res = ENGINE.runKernelFunc(forward, inputs, null, DepthwiseConv2dNativeBackpropInput);
+        const forward = backend => {
+            const convInfo = computeConv2DInfo(xShape, filter.shape, strides, dilations, pad, dimRoundingMode, true /* depthwise */);
+            return backend.depthwiseConv2DDerInput(dy4D, filter, convInfo);
+        };
+        const inputs = { dy: dy4D, filter };
+        const attrs = { strides, pad, dimRoundingMode, dilations, inputShape: xShape };
+        const res = ENGINE.runKernelFunc(forward, inputs, null, DepthwiseConv2dNativeBackpropInput, attrs);
         if (reshapedTo4D) {
             return reshape(res, [res.shape[1], res.shape[2], res.shape[3]]);
         }
@@ -18169,8 +18286,8 @@
                 `'${dilations}'`);
             const [$filter, x4D, y, bias] = saved;
             const dyActivation = getFusedDyActivation(dy, y, activation);
-            const xDer = depthwiseConv2dNativeBackpropInput(x4D.shape, dyActivation, $filter, convInfo);
-            const filterDer = depthwiseConv2dNativeBackpropFilter(x4D, dyActivation, $filter.shape, convInfo);
+            const xDer = depthwiseConv2dNativeBackpropInput(x4D.shape, dyActivation, $filter, strides, pad, dilations, dimRoundingMode);
+            const filterDer = depthwiseConv2dNativeBackpropFilter(x4D, dyActivation, $filter.shape, strides, pad, dilations, dimRoundingMode);
             if (bias != null) {
                 const biasDer = getFusedBiasGradient($bias, dyActivation);
                 return [xDer, filterDer, biasDer];
@@ -18394,7 +18511,7 @@
     /**
      * Extracts crops from the input image tensor and resizes them using bilinear
      * sampling or nearest neighbor sampling (possibly with aspect ratio change)
-     * to a common output size specified by crop_size.
+     * to a common output size specified by cropSize.
      *
      * @param image 4d tensor of shape `[batch,imageHeight,imageWidth, depth]`,
      *     where imageHeight and imageWidth must be positive, specifying the
@@ -19136,7 +19253,7 @@
      * =============================================================================
      */
     /**
-     * Bilinear resize a batch of 3D images to a new shape.
+     * Bilinear resize a single 3D image or a batch of 3D images to a new shape.
      *
      * @param images The images, of rank 4 or rank 3, of shape
      *     `[batch, height, width, inChannels]`. If rank 3, batch of 1 is assumed.
@@ -22224,8 +22341,8 @@
             const convInfo = computeConv3DInfo(x5D.shape, filterShape, strides, dilations, pad);
             return backend.conv3dDerFilter(x5D, dy5D, convInfo);
         };
-        const inputs = { x: x5D, y: dy5D };
-        const attrs = { strides, pad };
+        const inputs = { x: x5D, dy: dy5D };
+        const attrs = { strides, pad, filterShape };
         return ENGINE.runKernelFunc(forward, inputs, null, Conv3DBackpropFilterV2, attrs);
     }
     const conv3DBackpropFilter = op({ conv3DBackpropFilter_ });
@@ -22386,10 +22503,9 @@
                 assert(isInt(pad), () => `Error in depthwiseConv2d: pad must be an integer when using, ` +
                     `dimRoundingMode ${dimRoundingMode} but got pad ${pad}.`);
             }
-            const convInfo = computeConv2DInfo(x.shape, filter.shape, strides, $dilations, pad, dimRoundingMode, true /* depthwise */);
             return {
-                x: () => depthwiseConv2dNativeBackpropInput(x.shape, dy, filter, convInfo),
-                filter: () => depthwiseConv2dNativeBackpropFilter(x, dy, filter.shape, convInfo),
+                x: () => depthwiseConv2dNativeBackpropInput(x.shape, dy, filter, strides, pad, dilations, dimRoundingMode),
+                filter: () => depthwiseConv2dNativeBackpropFilter(x, dy, filter.shape, strides, pad, dilations, dimRoundingMode),
             };
         }
     };
@@ -23062,7 +23178,7 @@
     /**
      * Gradient helper function for the min and max operations.
      */
-    function gradForMinAndMax(dy, y, xOrig, origAxes, permutedAxes) {
+    function gradForMinAndMax(dy, y, xOrig, origAxes) {
         if (y.rank < xOrig.rank) {
             y = reshape(y, expandShapeToKeepDim(y.shape, origAxes));
         }
@@ -23072,7 +23188,7 @@
         return {
             x: () => {
                 const dx = mul(dy, cast(equal(xOrig, y), dy.dtype));
-                return permutedAxes == null ? dx : transpose(dx, permutedAxes);
+                return dx;
             }
         };
     }
@@ -23100,17 +23216,13 @@
         gradFunc: (dy, saved, attrs) => {
             const maxAttrs = attrs;
             const { reductionIndices } = maxAttrs;
-            const [x, y] = saved;
+            const x = saved[0];
+            const y = saved[1];
             const origAxes = parseAxisParam(reductionIndices, x.shape);
-            const permutedAxes = getAxesPermutation(origAxes, x.rank);
-            const maxGrad = gradForMinAndMax(dy, y, x, origAxes, permutedAxes);
+            const maxGrad = gradForMinAndMax(dy, y, x, origAxes);
             return {
                 x: () => {
-                    let out = maxGrad['x']();
-                    if (permutedAxes != null) {
-                        out = transpose(out);
-                    }
-                    return out;
+                    return maxGrad['x']();
                 }
             };
         }
@@ -23379,15 +23491,10 @@
             const { axis } = minAttrs;
             const [x, y] = saved;
             const origAxes = parseAxisParam(axis, x.shape);
-            const permutedAxes = getAxesPermutation(origAxes, x.rank);
-            const minGrad = gradForMinAndMax(dy, y, x, origAxes, permutedAxes);
+            const minGrad = gradForMinAndMax(dy, y, x, origAxes);
             return {
                 x: () => {
-                    let out = minGrad['x']();
-                    if (permutedAxes != null) {
-                        out = transpose(out);
-                    }
-                    return out;
+                    return minGrad['x']();
                 }
             };
         }
@@ -23417,6 +23524,35 @@
             const derA = () => mul(dy, cast(lessEqual(a, b), 'float32'));
             const derB = () => mul(dy, cast(greater(a, b), 'float32'));
             return { a: derA, b: derB };
+        }
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const mirrorPadGradConfig = {
+        kernelName: MirrorPad,
+        inputsToSave: ['x'],
+        gradFunc: (dy, saved, attrs) => {
+            // Pad introduces values around the original tensor, so the gradient
+            // slices the original shape out of the gradient.
+            const x = saved[0];
+            const { paddings } = attrs;
+            const begin = paddings.map(p => p[0]);
+            return { x: () => slice(dy, begin, x.shape) };
         }
     };
 
@@ -24720,6 +24856,7 @@
         maxPoolGradConfig,
         minGradConfig,
         minimumGradConfig,
+        mirrorPadGradConfig,
         modGradConfig,
         multiplyGradConfig,
         negateGradConfig,
@@ -26695,6 +26832,27 @@
     Tensor.prototype.minimum = function (b) {
         this.throwIfDisposed();
         return minimum(this, b);
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    Tensor.prototype.mirrorPad = function (paddings, mode) {
+        this.throwIfDisposed();
+        return mirrorPad(this, paddings, mode);
     };
 
     /**
@@ -32918,7 +33076,7 @@
 
     /** @license See the LICENSE file. */
     // This code is auto-generated, do not modify this file!
-    const version = '2.6.0';
+    const version = '2.7.0';
 
     /**
      * @license
@@ -43776,7 +43934,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    function getParamValue(paramName, node, tensorMap, context) {
+    function getParamValue(paramName, node, tensorMap, context, resourceManager) {
         const inputParam = node.inputParams[paramName];
         if (inputParam && inputParam.inputIndexStart !== undefined) {
             const start = inputParam.inputIndexStart;
@@ -43785,13 +43943,13 @@
                 (inputParam.inputIndexEnd === undefined ? start + 1 :
                     inputParam.inputIndexEnd);
             if (inputParam.type === 'tensor') {
-                return getTensor(node.inputNames[inputParam.inputIndexStart], tensorMap, context);
+                return getTensor(node.inputNames[inputParam.inputIndexStart], tensorMap, context, resourceManager);
             }
             if (inputParam.type === 'tensors') {
                 const inputs = node.inputNames.slice(start, end);
-                return inputs.map(name => getTensor(name, tensorMap, context));
+                return inputs.map(name => getTensor(name, tensorMap, context, resourceManager));
             }
-            const tensor = getTensor(node.inputNames.slice(start)[0], tensorMap, context);
+            const tensor = getTensor(node.inputNames.slice(start)[0], tensorMap, context, resourceManager);
             const data = tensor.dataSync();
             return inputParam.type === 'number' ?
                 data[0] :
@@ -43801,13 +43959,20 @@
         return attrParam && attrParam.value;
     }
     /**
-     * Retrieve the tensor based on input name by extracting the node name and
-     * output index information.
+     * Retrieve the tensor from tensorsMap based on input name.
      * @param name Node input name
      * @param tensorsMap Tensors map keyed by the node
+     * @param context contains tensors and information for running the current node.
+     * @param resourceManager Optional. Contains global resources of the model.
      */
-    function getTensor(name, tensorsMap, context) {
+    function getTensor(name, tensorsMap, context, resourceManager) {
         const [nodeName, index] = parseNodeName(name);
+        if (resourceManager != null) {
+            const tensor = resourceManager.getHashTableHandleByName(nodeName);
+            if (tensor != null) {
+                return tensor;
+            }
+        }
         const contextId = context.currentContextIds.find(contextId => {
             return !!tensorsMap[getNodeNameWithContextId(nodeName, contextId)];
         });
@@ -44549,22 +44714,6 @@
         json: json$1
     });
 
-    /**
-     * @license
-     * Copyright 2018 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
     const json$2 = [
         {
             'tfOpName': 'LoopCond',
@@ -44891,8 +45040,10 @@
                 { 'start': 0, 'name': 'tensorListId', 'type': 'tensor' },
                 { 'start': 1, 'name': 'tensor', 'type': 'tensor' },
             ],
-            'attrs': [{ 'tfName': 'element_dtype', 'name': 'elementDType', 'type': 'dtype' }]
-        },
+            'attrs': [
+                { 'tfName': 'element_dtype', 'name': 'elementDType', 'type': 'dtype' }
+            ]
+        }
     ];
 
     var control = /*#__PURE__*/Object.freeze({
@@ -45698,6 +45849,112 @@
         json: json$7
     });
 
+    const json$8 = [
+        {
+            'tfOpName': 'HashTable',
+            'category': 'hash_table',
+            'inputs': [],
+            'attrs': [
+                { 'tfName': 'shared_name', 'name': 'sharedName', 'type': 'string' },
+                {
+                    'tfName': 'use_node_name_sharing',
+                    'name': 'useNodeNameSharing',
+                    'type': 'bool'
+                },
+                { 'tfName': 'key_dtype', 'name': 'keyDType', 'type': 'dtype' },
+                { 'tfName': 'value_dtype', 'name': 'valueDType', 'type': 'dtype' },
+            ]
+        },
+        {
+            'tfOpName': 'HashTableV2',
+            'category': 'hash_table',
+            'inputs': [],
+            'attrs': [
+                { 'tfName': 'shared_name', 'name': 'sharedName', 'type': 'string' },
+                {
+                    'tfName': 'use_node_name_sharing',
+                    'name': 'useNodeNameSharing',
+                    'type': 'bool'
+                },
+                { 'tfName': 'key_dtype', 'name': 'keyDType', 'type': 'dtype' },
+                { 'tfName': 'value_dtype', 'name': 'valueDType', 'type': 'dtype' },
+            ]
+        },
+        {
+            'tfOpName': 'LookupTableImport',
+            'category': 'hash_table',
+            'inputs': [
+                { 'start': 0, 'name': 'tableHandle', 'type': 'tensor' },
+                { 'start': 1, 'name': 'keys', 'type': 'tensor' },
+                { 'start': 2, 'name': 'values', 'type': 'tensor' }
+            ],
+            'attrs': [
+                { 'tfName': 'Tin', 'name': 'tIn', 'type': 'dtype', 'notSupported': true }, {
+                    'tfName': 'Tout',
+                    'name': 'tOut',
+                    'type': 'dtype',
+                    'notSupported': true
+                }
+            ]
+        },
+        {
+            'tfOpName': 'LookupTableImportV2',
+            'category': 'hash_table',
+            'inputs': [
+                { 'start': 0, 'name': 'tableHandle', 'type': 'tensor' },
+                { 'start': 1, 'name': 'keys', 'type': 'tensor' },
+                { 'start': 2, 'name': 'values', 'type': 'tensor' }
+            ],
+            'attrs': [
+                { 'tfName': 'Tin', 'name': 'tIn', 'type': 'dtype', 'notSupported': true }, {
+                    'tfName': 'Tout',
+                    'name': 'tOut',
+                    'type': 'dtype',
+                    'notSupported': true
+                }
+            ]
+        },
+        {
+            'tfOpName': 'LookupTableFind',
+            'category': 'hash_table',
+            'inputs': [
+                { 'start': 0, 'name': 'tableHandle', 'type': 'tensor' },
+                { 'start': 1, 'name': 'keys', 'type': 'tensor' },
+                { 'start': 2, 'name': 'defaultValue', 'type': 'tensor' }
+            ],
+            'attrs': [
+                { 'tfName': 'Tin', 'name': 'tIn', 'type': 'dtype', 'notSupported': true }, {
+                    'tfName': 'Tout',
+                    'name': 'tOut',
+                    'type': 'dtype',
+                    'notSupported': true
+                }
+            ]
+        },
+        {
+            'tfOpName': 'LookupTableFindV2',
+            'category': 'hash_table',
+            'inputs': [
+                { 'start': 0, 'name': 'tableHandle', 'type': 'tensor' },
+                { 'start': 1, 'name': 'keys', 'type': 'tensor' },
+                { 'start': 2, 'name': 'defaultValue', 'type': 'tensor' }
+            ],
+            'attrs': [
+                { 'tfName': 'Tin', 'name': 'tIn', 'type': 'dtype', 'notSupported': true }, {
+                    'tfName': 'Tout',
+                    'name': 'tOut',
+                    'type': 'dtype',
+                    'notSupported': true
+                }
+            ]
+        }
+    ];
+
+    var hashTable = /*#__PURE__*/Object.freeze({
+        __proto__: null,
+        json: json$8
+    });
+
     /**
      * @license
      * Copyright 2018 Google LLC. All Rights Reserved.
@@ -45714,7 +45971,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$8 = [
+    const json$9 = [
         {
             'tfOpName': 'ResizeBilinear',
             'category': 'image',
@@ -45760,7 +46017,7 @@
 
     var image$1 = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$8
+        json: json$9
     });
 
     /**
@@ -45779,7 +46036,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$9 = [
+    const json$a = [
         {
             'tfOpName': 'Equal',
             'category': 'logical',
@@ -45909,7 +46166,7 @@
 
     var logical = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$9
+        json: json$a
     });
 
     /**
@@ -45928,7 +46185,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$a = [
+    const json$b = [
         {
             'tfOpName': '_FusedMatMul',
             'category': 'matrices',
@@ -46052,7 +46309,7 @@
 
     var matrices = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$a
+        json: json$b
     });
 
     /**
@@ -46071,7 +46328,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$b = [
+    const json$c = [
         {
             'tfOpName': 'FusedBatchNorm',
             'category': 'normalization',
@@ -46206,7 +46463,7 @@
 
     var normalization = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$b
+        json: json$c
     });
 
     /**
@@ -46225,7 +46482,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$c = [
+    const json$d = [
         {
             'tfOpName': 'Max',
             'category': 'reduction',
@@ -46321,7 +46578,7 @@
 
     var reduction = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$c
+        json: json$d
     });
 
     /**
@@ -46340,7 +46597,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$d = [
+    const json$e = [
         {
             'tfOpName': 'ConcatV2',
             'category': 'slice_join',
@@ -46546,7 +46803,7 @@
 
     var sliceJoin = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$d
+        json: json$e
     });
 
     /**
@@ -46565,7 +46822,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$e = [
+    const json$f = [
         {
             'tfOpName': 'FFT',
             'category': 'spectral',
@@ -46604,7 +46861,7 @@
 
     var spectral = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$e
+        json: json$f
     });
 
     /**
@@ -46623,7 +46880,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const json$f = [
+    const json$g = [
         {
             'tfOpName': 'Cast',
             'category': 'transformation',
@@ -46647,6 +46904,15 @@
                 { 'start': 0, 'name': 'x', 'type': 'tensor' },
                 { 'start': 1, 'name': 'axis', 'type': 'number' }
             ]
+        },
+        {
+            'tfOpName': 'MirrorPad',
+            'category': 'transformation',
+            'inputs': [
+                { 'start': 0, 'name': 'x', 'type': 'tensor' },
+                { 'start': 1, 'name': 'padding', 'type': 'number[]' },
+            ],
+            'attrs': [{ 'tfName': 'mode', 'name': 'mode', 'type': 'string' }]
         },
         {
             'tfOpName': 'Pad',
@@ -46738,7 +47004,7 @@
 
     var transformation = /*#__PURE__*/Object.freeze({
         __proto__: null,
-        json: json$f
+        json: json$g
     });
 
     /**
@@ -46767,7 +47033,7 @@
             const ops = [
                 arithmetic, basicMath, control, convolution, creation, dynamic,
                 evaluation, logical, image$1, graph, matrices, normalization, reduction,
-                sliceJoin, spectral, transformation
+                sliceJoin, spectral, transformation, hashTable
             ];
             const mappersJson = [].concat(...ops.map(op => op.json));
             this.opMappers = mappersJson.reduce((map, mapper) => {
@@ -48723,6 +48989,178 @@
 
     /**
      * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Hashtable contains a set of tensors, which can be accessed by key.
+     */
+    class HashTable {
+        /**
+         * Constructor of HashTable. Creates a hash table.
+         *
+         * @param keyDType `dtype` of the table keys.
+         * @param valueDType `dtype` of the table values.
+         */
+        constructor(keyDType, valueDType) {
+            this.keyDType = keyDType;
+            this.valueDType = valueDType;
+            this.handle = scalar(0);
+            // tslint:disable-next-line: no-any
+            this.tensorMap = new Map();
+            keep(this.handle);
+        }
+        get id() {
+            return this.handle.id;
+        }
+        /**
+         * Dispose the tensors and handle and clear the hashtable.
+         */
+        clearAndClose() {
+            this.tensorMap.forEach(value => value.dispose());
+            this.tensorMap.clear();
+            this.handle.dispose();
+        }
+        /**
+         * The number of items in the hash table.
+         */
+        size() {
+            return this.tensorMap.size;
+        }
+        /**
+         * Replaces the contents of the table with the specified keys and values.
+         * @param keys Keys to store in the hashtable.
+         * @param values Values to store in the hashtable.
+         */
+        async import(keys, values) {
+            this.checkKeyAndValueTensor(keys, values);
+            // We only store the primitive values of the keys, this allows lookup
+            // to be O(1).
+            const $keys = await keys.data();
+            // Clear the hashTable before inserting new values.
+            this.tensorMap.forEach(value => value.dispose());
+            this.tensorMap.clear();
+            return tidy(() => {
+                const $values = unstack(values);
+                const keysLength = $keys.length;
+                const valuesLength = $values.length;
+                assert(keysLength === valuesLength, () => `The number of elements doesn't match, keys has ` +
+                    `${keysLength} elements, the values has ${valuesLength} ` +
+                    `elements.`);
+                for (let i = 0; i < keysLength; i++) {
+                    const key = $keys[i];
+                    const value = $values[i];
+                    keep(value);
+                    this.tensorMap.set(key, value);
+                }
+                return this.handle;
+            });
+        }
+        /**
+         * Looks up keys in a hash table, outputs the corresponding values.
+         *
+         * Performs batch lookups, for every element in the key tensor, `find`
+         * stacks the corresponding value into the return tensor.
+         *
+         * If an element is not present in the table, the given `defaultValue` is
+         * used.
+         *
+         * @param keys Keys to look up. Must have the same type as the keys of the
+         *     table.
+         * @param defaultValue The scalar `defaultValue` is the value output for keys
+         *     not present in the table. It must also be of the same type as the
+         *     table values.
+         */
+        async find(keys, defaultValue) {
+            this.checkKeyAndValueTensor(keys, defaultValue);
+            const $keys = await keys.data();
+            return tidy(() => {
+                const result = [];
+                for (let i = 0; i < $keys.length; i++) {
+                    const key = $keys[i];
+                    const value = this.findWithDefault(key, defaultValue);
+                    result.push(value);
+                }
+                return stack(result);
+            });
+        }
+        // tslint:disable-next-line: no-any
+        findWithDefault(key, defaultValue) {
+            const result = this.tensorMap.get(key);
+            return result != null ? result : defaultValue;
+        }
+        checkKeyAndValueTensor(key, value) {
+            if (key.dtype !== this.keyDType) {
+                throw new Error(`Expect key dtype ${this.keyDType}, but got ` +
+                    `${key.dtype}`);
+            }
+            if (value.dtype !== this.valueDType) {
+                throw new Error(`Expect value dtype ${this.valueDType}, but got ` +
+                    `${value.dtype}`);
+            }
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const executeOp$8 = async (node, tensorMap, context, resourceManager) => {
+        switch (node.op) {
+            case 'HashTable':
+            case 'HashTableV2': {
+                const keyDType = getParamValue('keyDType', node, tensorMap, context);
+                const valueDType = getParamValue('valueDType', node, tensorMap, context);
+                const hashTable = new HashTable(keyDType, valueDType);
+                resourceManager.addHashTable(node.name, hashTable);
+                return [hashTable.handle];
+            }
+            case 'LookupTableImport':
+            case 'LookupTableImportV2': {
+                const handle = getParamValue('tableHandle', node, tensorMap, context, resourceManager);
+                const keys = getParamValue('keys', node, tensorMap, context);
+                const values = getParamValue('values', node, tensorMap, context);
+                const hashTable = resourceManager.getHashTableById(handle.id);
+                return [await hashTable.import(keys, values)];
+            }
+            case 'LookupTableFind':
+            case 'LookupTableFindV2': {
+                const handle = getParamValue('tableHandle', node, tensorMap, context, resourceManager);
+                const keys = getParamValue('keys', node, tensorMap, context);
+                const defaultValue = getParamValue('defaultValue', node, tensorMap, context);
+                const hashTable = resourceManager.getHashTableById(handle.id);
+                return [await hashTable.find(keys, defaultValue)];
+            }
+            default:
+                throw TypeError(`Node type ${node.op} is not implemented`);
+        }
+    };
+
+    /**
+     * @license
      * Copyright 2018 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -48737,7 +49175,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$8 = (node, tensorMap, context) => {
+    const executeOp$9 = (node, tensorMap, context) => {
         switch (node.op) {
             case 'ResizeBilinear': {
                 const images = getParamValue('images', node, tensorMap, context);
@@ -48781,7 +49219,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$9 = (node, tensorMap, context) => {
+    const executeOp$a = (node, tensorMap, context) => {
         switch (node.op) {
             case 'Equal': {
                 return [equal(getParamValue('a', node, tensorMap, context), getParamValue('b', node, tensorMap, context))];
@@ -48835,7 +49273,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$a = (node, tensorMap, context) => {
+    const executeOp$b = (node, tensorMap, context) => {
         switch (node.op) {
             case 'BatchMatMul':
             case 'BatchMatMulV2':
@@ -48888,7 +49326,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$b = (node, tensorMap, context) => {
+    const executeOp$c = (node, tensorMap, context) => {
         switch (node.op) {
             case 'FusedBatchNorm':
             case 'FusedBatchNormV2': {
@@ -48930,7 +49368,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$c = (node, tensorMap, context) => {
+    const executeOp$d = (node, tensorMap, context) => {
         switch (node.op) {
             case 'Max': {
                 const axis = getParamValue('axis', node, tensorMap, context);
@@ -49002,7 +49440,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$d = (node, tensorMap, context) => {
+    const executeOp$e = (node, tensorMap, context) => {
         switch (node.op) {
             case 'ConcatV2':
             case 'Concat': {
@@ -49120,7 +49558,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$e = (node, tensorMap, context) => {
+    const executeOp$f = (node, tensorMap, context) => {
         switch (node.op) {
             case 'FFT': {
                 return [fft(getParamValue('x', node, tensorMap, context))];
@@ -49155,7 +49593,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const executeOp$f = (node, tensorMap, context) => {
+    const executeOp$g = (node, tensorMap, context) => {
         switch (node.op) {
             case 'Cast': {
                 return [cast(getParamValue('x', node, tensorMap, context), getParamValue('dtype', node, tensorMap, context))];
@@ -49170,6 +49608,9 @@
             }
             case 'Reshape': {
                 return [reshape(getParamValue('x', node, tensorMap, context), getParamValue('shape', node, tensorMap, context))];
+            }
+            case 'MirrorPad': {
+                return [mirrorPad(getParamValue('x', node, tensorMap, context), getParamValue('padding', node, tensorMap, context), getParamValue('mode', node, tensorMap, context))];
             }
             case 'PadV2':
             case 'Pad': {
@@ -49218,8 +49659,10 @@
      * Executes the op defined by the node object.
      * @param node
      * @param tensorMap contains tensors for executed nodes and weights
+     * @param context contains tensors and information for running the current node.
+     * @param resourceManager Optional. Contains global resources of the model.
      */
-    function executeOp$g(node, tensorMap, context) {
+    function executeOp$h(node, tensorMap, context, resourceManager) {
         const value = ((node, tensorMap, context) => {
             switch (node.category) {
                 case 'arithmetic':
@@ -49237,23 +49680,25 @@
                 case 'evaluation':
                     return tidy(() => executeOp$6(node, tensorMap, context));
                 case 'image':
-                    return tidy(() => executeOp$8(node, tensorMap, context));
+                    return tidy(() => executeOp$9(node, tensorMap, context));
                 case 'graph':
                     return tidy(() => executeOp$7(node, tensorMap, context));
                 case 'logical':
-                    return tidy(() => executeOp$9(node, tensorMap, context));
-                case 'matrices':
                     return tidy(() => executeOp$a(node, tensorMap, context));
-                case 'normalization':
+                case 'matrices':
                     return tidy(() => executeOp$b(node, tensorMap, context));
-                case 'reduction':
+                case 'normalization':
                     return tidy(() => executeOp$c(node, tensorMap, context));
-                case 'slice_join':
+                case 'reduction':
                     return tidy(() => executeOp$d(node, tensorMap, context));
-                case 'spectral':
+                case 'slice_join':
                     return tidy(() => executeOp$e(node, tensorMap, context));
-                case 'transformation':
+                case 'spectral':
                     return tidy(() => executeOp$f(node, tensorMap, context));
+                case 'transformation':
+                    return tidy(() => executeOp$g(node, tensorMap, context));
+                case 'hash_table':
+                    return executeOp$8(node, tensorMap, context, resourceManager);
                 case 'custom':
                     const opMapper = getRegisteredOp(node.op);
                     if (opMapper && opMapper.customExecutor) {
@@ -49268,7 +49713,7 @@
                         `, or register a custom execution with tf.registerOp()`);
             }
         })(node, tensorMap, context);
-        if (value instanceof Promise) {
+        if (isPromise(value)) {
             return value.then((data) => [].concat(data));
         }
         return [].concat(value);
@@ -49451,7 +49896,7 @@
         const frontier = [...outputs];
         while (frontier.length > 0) {
             const node = frontier.pop();
-            if (isControlFlow(node) || isDynamicShape(node)) {
+            if (isControlFlow(node) || isDynamicShape(node) || isHashTable(node)) {
                 if (dynamicNode == null) {
                     dynamicNode = node;
                     syncInputs = dynamicNode.children.map(child => child.name)
@@ -49538,11 +49983,18 @@
     const DYNAMIC_SHAPE_OPS = [
         'NonMaxSuppressionV2', 'NonMaxSuppressionV3', 'NonMaxSuppressionV5', 'Where'
     ];
+    const HASH_TABLE_OPS = [
+        'HashTable', 'HashTableV2', 'LookupTableImport', 'LookupTableImportV2',
+        'LookupTableFind', 'LookupTableFindV2'
+    ];
     function isControlFlow(node) {
         return CONTROL_FLOW_OPS.indexOf(node.op) >= 0;
     }
     function isDynamicShape(node) {
         return DYNAMIC_SHAPE_OPS.indexOf(node.op) >= 0;
+    }
+    function isHashTable(node) {
+        return HASH_TABLE_OPS.indexOf(node.op) >= 0;
     }
 
     /**
@@ -49605,6 +50057,13 @@
             const weightIds = Object.keys(weightMap).map(key => weightMap[key].map(tensor => tensor.id));
             this._weightIds = [].concat(...weightIds);
             this._weightMap = weightMap;
+        }
+        /**
+         * Set `ResourceManager` shared by executors of a model.
+         * @param resourceManager: `ResourceManager` of the `GraphModel`.
+         */
+        set resourceManager(resourceManager) {
+            this._resourceManager = resourceManager;
         }
         get inputs() {
             return this._inputs.map(node => {
@@ -49678,10 +50137,10 @@
          * Executes the inference for given input tensors.
          * @param inputs Tensor map for the model inputs, keyed by the input node
          * names.
-         * @param outputs output node name from the Tensorflow model, if no outputs
-         * are specified, the default outputs of the model would be used. You can
-         * inspect intermediate nodes of the model by adding them to the outputs
-         * array.
+         * @param outputs Optional. output node name from the Tensorflow model, if
+         * no outputs are specified, the default outputs of the model would be used.
+         * You can inspect intermediate nodes of the model by adding them to the
+         * outputs array.
          */
         execute(inputs, outputs) {
             inputs = this.mapInputs(inputs);
@@ -49720,8 +50179,8 @@
                 for (let i = 0; i < orderedNodes.length; i++) {
                     const node = orderedNodes[i];
                     if (!tensorsMap[node.name]) {
-                        const tensors = executeOp$g(node, tensorsMap, context);
-                        if (tensors instanceof Promise) {
+                        const tensors = executeOp$h(node, tensorsMap, context, this._resourceManager);
+                        if (isPromise(tensors)) {
                             throw new Error(`The execution of the op '${node.op}' returned a promise. ` +
                                 `Please use model.executeAsync() instead.`);
                         }
@@ -49795,11 +50254,11 @@
          * Executes the inference for given input tensors in Async fashion.
          * @param inputs Tensor map for the model inputs, keyed by the input node
          * names.
-         * @param outputs output node name from the Tensorflow model, if no outputs
-         * are specified, the default outputs of the model would be used. You can
-         * inspect intermediate nodes of the model by adding them to the outputs
-         * array.
-         * @param isFunctionExecution Flag for executing a function.
+         * @param outputs Optional. output node name from the Tensorflow model,
+         * if no outputs are specified, the default outputs of the model would be
+         * used. You can inspect intermediate nodes of the model by adding them to the
+         * outputs array.
+         * @param isFunctionExecution Optional. Flag for executing a function.
          * @param tensorArrayMap Optional, global TensorArray map by id. Used for
          * function execution.
          * @param tensorArrayMap Optinal global TensorList map by id. Used for
@@ -49849,15 +50308,26 @@
          * ExecutionContext to keep track of the frames and loop iterators.
          * @param inputs placeholder tensors for the graph.
          * @param context the execution context object for current execution.
+         * @param outputNames Optional. output node name from the Tensorflow model,
+         * if no outputs are specified, the default outputs of the model would be
+         * used. You can inspect intermediate nodes of the model by adding them to the
+         * outputs array.
          * @param isFunctionExecution Flag for executing a function.
          */
         async executeWithControlFlow(inputs, context, outputNames, isFunctionExecution) {
             const names = Object.keys(inputs);
             const inputNodes = names.map(name => this.graph.nodes[parseNodeName(name)[0]]);
             const outputNodeNames = outputNames.map(name => parseNodeName(name)[0]);
-            const outputNodes = outputNodeNames.map(name => this.graph.nodes[name]);
-            const { usedNodes, missingInputs, dynamicNode, syncInputs } = getExecutionSubgraph(inputs, outputNodes, this.weightMap);
-            const stack = [...inputNodes, ...this.graph.weights].map(node => {
+            let outputNodes = outputNodeNames.map(name => this.graph.nodes[name]);
+            // If no outputs are specified, then use the default outputs of the model.
+            if (outputNodes.length === 0) {
+                outputNodes = this._outputs;
+            }
+            const { usedNodes, missingInputs, dynamicNode, syncInputs } = getExecutionSubgraph(inputs, outputNodes, this.weightMap, this._initNodes);
+            // First nodes to execute include inputNodes, weights, and initNodes.
+            const stack = [
+                ...inputNodes, ...this.graph.weights, ...(this._initNodes || [])
+            ].map(node => {
                 return { node, contexts: context.currentContext };
             });
             const tensorsMap = Object.assign({}, this.weightMap);
@@ -49908,14 +50378,15 @@
                     getParamValue('isConstant', item.node, tensorMap, context)) {
                     [nodeName] = getNodeNameAndIndex(item.node.name, context);
                 }
-                // only process nodes that are not provided as input nodes.
-                if (inputNodes.indexOf(item.node) === -1) {
-                    const tensors = executeOp$g(item.node, tensorMap, context);
+                // only process nodes that are not in the tensorMap yet, this include
+                // inputNodes and internal initNodes.
+                if (tensorMap[item.node.name] == null) {
+                    const tensors = executeOp$h(item.node, tensorMap, context, this._resourceManager);
                     if (!nodeName) {
                         [nodeName] = getNodeNameAndIndex(item.node.name, context);
                     }
                     const currentContext = context.currentContext;
-                    if (tensors instanceof Promise) {
+                    if (isPromise(tensors)) {
                         promises.push(tensors.then(t => {
                             tensorMap[nodeName] = t;
                             context.currentContext = currentContext;
@@ -50032,6 +50503,57 @@
     }
 
     /**
+     * Contains global resources of a model.
+     */
+    class ResourceManager {
+        constructor(hashTableNameToHandle = {}, hashTableMap = {}) {
+            this.hashTableNameToHandle = hashTableNameToHandle;
+            this.hashTableMap = hashTableMap;
+        }
+        /**
+         * Register a `HashTable` in the resource manager.
+         *
+         * The `HashTable` can be retrieved by `resourceManager.getHashTableById`,
+         * where id is the table handle tensor's id.
+         *
+         * @param name Op node name that creates the `HashTable`.
+         * @param hashTable The `HashTable` to be added to resource manager.
+         */
+        addHashTable(name, hashTable) {
+            this.hashTableNameToHandle[name] = hashTable.handle;
+            this.hashTableMap[hashTable.id] = hashTable;
+        }
+        /**
+         * Get the table handle by node name.
+         * @param name Op node name that creates the `HashTable`. This name is also
+         *     used in the inputs list of lookup and import `HashTable` ops.
+         */
+        getHashTableHandleByName(name) {
+            return this.hashTableNameToHandle[name];
+        }
+        /**
+         * Get the actual `HashTable` by its handle tensor's id.
+         * @param id The id of the handle tensor.
+         */
+        getHashTableById(id) {
+            return this.hashTableMap[id];
+        }
+        /**
+         * Dispose `ResourceManager`, including its hashTables and tensors in them.
+         */
+        dispose() {
+            for (const key in this.hashTableMap) {
+                this.hashTableMap[key].clearAndClose();
+                delete this.hashTableMap[key];
+            }
+            for (const name in this.hashTableNameToHandle) {
+                this.hashTableNameToHandle[name].dispose();
+                delete this.hashTableNameToHandle[name];
+            }
+        }
+    }
+
+    /**
      * @license
      * Copyright 2018 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
@@ -50076,6 +50598,7 @@
             if (loadOptions == null) {
                 this.loadOptions = {};
             }
+            this.resourceManager = new ResourceManager();
         }
         // Returns the version information for the tensorflow model GraphDef.
         get modelVersion() {
@@ -50150,11 +50673,18 @@
             const weightMap = decodeWeights(this.artifacts.weightData, this.artifacts.weightSpecs);
             this.executor = new GraphExecutor(OperationMapper.Instance.transformGraph(graph, signature));
             this.executor.weightMap = this.convertTensorMapToTensorsMap(weightMap);
+            // Attach a model-level resourceManager to each executor to share resources,
+            // such as `HashTable`.
+            this.executor.resourceManager = this.resourceManager;
             if (artifacts.modelInitializer != null) {
                 const initializer = OperationMapper.Instance.transformGraph(artifacts.modelInitializer);
                 this.initializer = new GraphExecutor(initializer);
                 this.initializer.weightMap = this.executor.weightMap;
-                this.initializer.execute({}, []);
+                // Attach a model-level resourceManager to the initializer, the
+                // hashTables created from when executing the initializer will be stored
+                // in the resourceManager.
+                this.initializer.resourceManager = this.resourceManager;
+                this.initializer.executeAsync({}, []);
             }
             return true;
         }
@@ -50332,7 +50862,7 @@
             }, {});
         }
         /**
-         * Releases the memory used by the weight tensors.
+         * Releases the memory used by the weight tensors and resourceManager.
          *
          * @doc {heading: 'Models', subheading: 'Classes'}
          */
@@ -50341,6 +50871,7 @@
             if (this.initializer) {
                 this.initializer.dispose();
             }
+            this.resourceManager.dispose();
         }
     }
     /**
@@ -50466,24 +50997,6 @@
     const tile$3 = tile$1;
     const topkImpl$1 = topkImpl;
     const whereImpl$1 = whereImpl;
-    function mapActivation(backend, x, activation, preluActivationWeights) {
-        if (activation === 'linear') {
-            return backend.linear(x);
-        }
-        else if (activation === 'relu') {
-            return backend.relu(x);
-        }
-        else if (activation === 'elu') {
-            return elu(x);
-        }
-        else if (activation === 'relu6') {
-            return backend.relu6(x);
-        }
-        else if (activation === 'prelu') {
-            return backend.prelu(x, preluActivationWeights);
-        }
-        throw new Error(`Activation ${activation} has not been implemented for the CPU backend.`);
-    }
     class MathBackendCPU extends KernelBackend {
         constructor() {
             super();
@@ -50518,7 +51031,15 @@
          * @param values The value of the `TensorInfo` stored as a flattened array.
          */
         makeTensorInfo(shape, dtype, values) {
-            const outId = this.write(values, shape, dtype);
+            let outId;
+            if (dtype === 'string' && values != null && values.length > 0 &&
+                isString(values[0])) {
+                const encodedValues = values.map(d => encodeString(d));
+                outId = this.write(encodedValues, shape, dtype);
+            }
+            else {
+                outId = this.write(values, shape, dtype);
+            }
             return { dataId: outId, shape, dtype };
         }
         /** Increase refCount of a `TensorData`. */
@@ -50696,60 +51217,6 @@
         pow(a, b) {
             assertNotComplex([a, b], 'pow');
             return this.broadcastedBinaryOp(a, b, a.dtype, (aValue, bValue) => Math.pow(aValue, bValue));
-        }
-        batchMatMul(a, b, transposeA, transposeB) {
-            assertNotComplex([a, b], 'matMul');
-            const sharedDim = transposeA ? a.shape[1] : a.shape[2];
-            const leftDim = transposeA ? a.shape[2] : a.shape[1];
-            const rightDim = transposeB ? b.shape[1] : b.shape[2];
-            const batchDim = a.shape[0];
-            const aValues = this.readSync(a.dataId);
-            const bValues = this.readSync(b.dataId);
-            const [aBatch, aOuterStep, aInnerStep] = transposeA ?
-                [a.strides[0], 1, a.strides[1]] :
-                [a.strides[0], a.strides[1], 1];
-            const [bInnerStep, bOuterStep, bBatch] = transposeB ?
-                [1, b.strides[1], b.strides[0]] :
-                [b.strides[1], 1, b.strides[0]];
-            const size = leftDim * rightDim;
-            const result = buffer([batchDim, leftDim, rightDim], a.dtype);
-            const resVals = result.values;
-            const blockSize = this.blockSize;
-            for (let b = 0; b < batchDim; b++) {
-                for (let i0 = 0; i0 < leftDim; i0 += blockSize) {
-                    for (let j0 = 0; j0 < rightDim; j0 += blockSize) {
-                        for (let k0 = 0; k0 < sharedDim; k0 += blockSize) {
-                            // for when blockSize doesn't evenly divide the input
-                            const iBlock = Math.min(i0 + blockSize, leftDim);
-                            const jBlock = Math.min(j0 + blockSize, rightDim);
-                            const kBlock = Math.min(k0 + blockSize, sharedDim);
-                            for (let i = i0; i < iBlock; i++) {
-                                for (let j = j0; j < jBlock; j++) {
-                                    let sum = 0.0;
-                                    for (let k = k0; k < kBlock; k++) {
-                                        sum += aValues[b * aBatch + i * aOuterStep + k * aInnerStep] *
-                                            bValues[k * bInnerStep + j * bOuterStep + b * bBatch];
-                                    }
-                                    resVals[b * size + (i * rightDim + j)] += sum;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return result.toTensor();
-        }
-        fusedBatchMatMul({ a, b, transposeA, transposeB, bias, activation, preluActivationWeights }) {
-            let result = this.batchMatMul(a, b, transposeA, transposeB);
-            if (bias) {
-                // TODO(lina128): Use add directly once fusedBatchMatMul is modularized.
-                result = add$1(result, bias);
-            }
-            if (activation) {
-                result =
-                    mapActivation(this, result, activation, preluActivationWeights);
-            }
-            return result;
         }
         floorDiv(a, b) {
             assertNotComplex([a, b], 'floorDiv');
@@ -51055,33 +51522,6 @@
                 return diff * diff;
             });
         }
-        linear(x) {
-            return x;
-        }
-        relu(x) {
-            assertNotComplex(x, 'relu');
-            const res = zeros(x.shape, x.dtype);
-            const resVals = this.readSync(res.dataId);
-            const inVals = this.readSync(x.dataId);
-            for (let i = 0; i < inVals.length; ++i) {
-                resVals[i] = Math.max(0, inVals[i]);
-            }
-            return res;
-        }
-        relu6(x) {
-            assertNotComplex(x, 'relu');
-            const res = zeros(x.shape, x.dtype);
-            const resVals = this.readSync(res.dataId);
-            const inVals = this.readSync(x.dataId);
-            for (let i = 0; i < inVals.length; ++i) {
-                resVals[i] = Math.min(Math.max(0, inVals[i]), 6);
-            }
-            return res;
-        }
-        prelu(x, a) {
-            assertNotComplex([x, a], 'prelu');
-            return this.broadcastedBinaryOp(x, a, x.dtype, (xValue, aValue) => xValue < 0 ? aValue * xValue : xValue);
-        }
         eluDer(dy, y) {
             assertNotComplex([dy, y], 'eluDer');
             const resultValues = new Float32Array(y.size);
@@ -51101,508 +51541,6 @@
         atan2(a, b) {
             assertNotComplex([a, b], 'atan2');
             return this.broadcastedBinaryOp(a, b, a.dtype, (aValue, bValue) => Math.atan2(aValue, bValue));
-        }
-        fusedConv2d({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
-            let result = this.conv2d(input, filter, convInfo);
-            if (bias) {
-                // TODO(lina128): Use add directly once fusedConv2d is modularized.
-                result = add$1(result, bias);
-            }
-            if (activation) {
-                result =
-                    mapActivation(this, result, activation, preluActivationWeights);
-            }
-            return result;
-        }
-        conv2d(x, filter, convInfo) {
-            assertNotComplex([x, filter], 'conv2d');
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const dilationHeight = convInfo.dilationHeight;
-            const dilationWidth = convInfo.dilationWidth;
-            const padLeft = convInfo.padInfo.left;
-            const padTop = convInfo.padInfo.top;
-            const isChannelsLast = convInfo.dataFormat === 'channelsLast';
-            const y = buffer(convInfo.outShape, x.dtype);
-            const xBatchStride = x.strides[0];
-            const xRowStride = isChannelsLast ? x.strides[1] : x.strides[2];
-            const xColStride = isChannelsLast ? x.strides[2] : 1;
-            const xChannelStride = isChannelsLast ? 1 : x.strides[1];
-            const yBatchStride = y.strides[0];
-            const yRowStride = isChannelsLast ? y.strides[1] : y.strides[2];
-            const yColStride = isChannelsLast ? y.strides[2] : 1;
-            const yChannelStride = isChannelsLast ? 1 : y.strides[1];
-            const xVals = this.readSync(x.dataId);
-            const wVals = this.readSync(filter.dataId);
-            const yVals = y.values;
-            for (let b = 0; b < convInfo.batchSize; ++b) {
-                const xOffset1 = b * xBatchStride;
-                const yOffset1 = b * yBatchStride;
-                for (let yR = 0; yR < convInfo.outHeight; ++yR) {
-                    const yOffset2 = yOffset1 + yR * yRowStride;
-                    const xRCorner = yR * convInfo.strideHeight - padTop;
-                    for (let wR = 0; wR < filterHeight; wR++) {
-                        const xR = xRCorner + wR * dilationHeight;
-                        if (xR < 0 || xR >= convInfo.inHeight) {
-                            continue;
-                        }
-                        const wOffset1 = wR * filter.strides[0];
-                        const xOffset2 = xOffset1 + xR * xRowStride;
-                        for (let yC = 0; yC < convInfo.outWidth; ++yC) {
-                            const yOffset3 = yOffset2 + yC * yColStride;
-                            const xCCorner = yC * convInfo.strideWidth - padLeft;
-                            for (let wC = 0; wC < filterWidth; wC++) {
-                                const xC = xCCorner + wC * dilationWidth;
-                                if (xC < 0 || xC >= convInfo.inWidth) {
-                                    continue;
-                                }
-                                const wOffset2 = wOffset1 + wC * filter.strides[1];
-                                const xOffset3 = xOffset2 + xC * xColStride;
-                                let wOffset3 = wOffset2;
-                                for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
-                                    const xVal = xVals[xOffset3 + d1 * xChannelStride];
-                                    for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
-                                        yVals[yOffset3 + d2 * yChannelStride] +=
-                                            xVal * wVals[wOffset3 + d2];
-                                    }
-                                    wOffset3 += convInfo.outChannels;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return y.toTensor();
-        }
-        conv3d(x, filter, convInfo) {
-            const filterDepth = convInfo.filterDepth;
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const dilationDepth = convInfo.dilationDepth;
-            const dilationHeight = convInfo.dilationHeight;
-            const dilationWidth = convInfo.dilationWidth;
-            const padFront = convInfo.padInfo.front;
-            const padLeft = convInfo.padInfo.left;
-            const padTop = convInfo.padInfo.top;
-            const y = buffer(convInfo.outShape, x.dtype);
-            const xVals = this.readSync(x.dataId);
-            const wVals = this.readSync(filter.dataId);
-            const yVals = y.values;
-            for (let b = 0; b < convInfo.batchSize; ++b) {
-                const xOffset1 = b * x.strides[0];
-                const yOffset1 = b * y.strides[0];
-                for (let yF = 0; yF < convInfo.outDepth; ++yF) {
-                    const yOffset2 = yOffset1 + yF * y.strides[1];
-                    const xFCorner = yF * convInfo.strideDepth - padFront;
-                    for (let wF = 0; wF < filterDepth; wF++) {
-                        const xF = xFCorner + wF * dilationDepth;
-                        if (xF < 0 || xF >= convInfo.inDepth) {
-                            continue;
-                        }
-                        const wOffset1 = wF * filter.strides[0];
-                        const xOffset2 = xOffset1 + xF * x.strides[1];
-                        for (let yR = 0; yR < convInfo.outHeight; ++yR) {
-                            const yOffset3 = yOffset2 + yR * y.strides[2];
-                            const xRCorner = yR * convInfo.strideHeight - padTop;
-                            for (let wR = 0; wR < filterHeight; wR++) {
-                                const xR = xRCorner + wR * dilationHeight;
-                                if (xR < 0 || xR >= convInfo.inHeight) {
-                                    continue;
-                                }
-                                const wOffset2 = wOffset1 + wR * filter.strides[1];
-                                const xOffset3 = xOffset2 + xR * x.strides[2];
-                                for (let yC = 0; yC < convInfo.outWidth; ++yC) {
-                                    const yOffset4 = yOffset3 + yC * convInfo.outChannels;
-                                    const xCCorner = yC * convInfo.strideWidth - padLeft;
-                                    for (let wC = 0; wC < filterWidth; wC++) {
-                                        const xC = xCCorner + wC * dilationWidth;
-                                        if (xC < 0 || xC >= convInfo.inWidth) {
-                                            continue;
-                                        }
-                                        const wOffset3 = wOffset2 + wC * filter.strides[2];
-                                        const xOffset4 = xOffset3 + xC * convInfo.inChannels;
-                                        let wOffset4 = wOffset3;
-                                        for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
-                                            const xVal = xVals[xOffset4 + d1];
-                                            for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
-                                                yVals[yOffset4 + d2] += xVal * wVals[wOffset4 + d2];
-                                            }
-                                            wOffset4 += convInfo.outChannels;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return y.toTensor();
-        }
-        conv2dDerInput(dy, filter, convInfo) {
-            assertNotComplex([dy, filter], 'conv2dDerInput');
-            const dx = buffer(convInfo.inShape, 'float32');
-            const dxValues = dx.values;
-            const dyValues = this.readSync(dy.dataId);
-            const fltValues = this.readSync(filter.dataId);
-            const [fltS0, fltS1, fltS2] = filter.strides;
-            const { batchSize, filterHeight, filterWidth, inChannels, inHeight, inWidth, outChannels, outHeight, outWidth, strideHeight, strideWidth, dataFormat } = convInfo;
-            const topPad = filterHeight - 1 - convInfo.padInfo.top;
-            const leftPad = filterWidth - 1 - convInfo.padInfo.left;
-            const isChannelsLast = dataFormat === 'channelsLast';
-            const xBatchStride = dx.strides[0];
-            const xRowStride = isChannelsLast ? dx.strides[1] : dx.strides[2];
-            const xColStride = isChannelsLast ? dx.strides[2] : 1;
-            const xChannelStride = isChannelsLast ? 1 : dx.strides[1];
-            const yBatchStride = dy.strides[0];
-            const yRowStride = isChannelsLast ? dy.strides[1] : dy.strides[2];
-            const yColStride = isChannelsLast ? dy.strides[2] : 1;
-            const yChannelStride = isChannelsLast ? 1 : dy.strides[1];
-            for (let b = 0; b < batchSize; ++b) {
-                for (let d1 = 0; d1 < inChannels; ++d1) {
-                    for (let xR = 0; xR < inHeight; ++xR) {
-                        const xRCorner = xR - topPad;
-                        const xRMin = Math.max(0, Math.ceil(xRCorner / strideHeight));
-                        const yRMax = Math.min(outHeight, (filterHeight + xRCorner) / strideHeight);
-                        for (let xC = 0; xC < inWidth; ++xC) {
-                            const xCCorner = xC - leftPad;
-                            const xCMin = Math.max(0, Math.ceil(xCCorner / strideWidth));
-                            const yCMax = Math.min(outWidth, (filterWidth + xCCorner) / strideWidth);
-                            let dotProd = 0;
-                            for (let yR = xRMin; yR < yRMax; ++yR) {
-                                const wR = yR * strideHeight - xRCorner;
-                                for (let yC = xCMin; yC < yCMax; ++yC) {
-                                    const wC = yC * strideWidth - xCCorner;
-                                    const dyOffset = yBatchStride * b + yRowStride * yR + yColStride * yC;
-                                    const fltOffset = fltS0 * (filterHeight - 1 - wR) +
-                                        fltS1 * (filterWidth - 1 - wC) + fltS2 * d1;
-                                    for (let d2 = 0; d2 < outChannels; ++d2) {
-                                        const pixel = dyValues[dyOffset + yChannelStride * d2];
-                                        const weight = fltValues[fltOffset + d2];
-                                        dotProd += pixel * weight;
-                                    }
-                                }
-                            }
-                            const dxOffset = xBatchStride * b + xRowStride * xR +
-                                xColStride * xC + xChannelStride * d1;
-                            dxValues[dxOffset] = dotProd;
-                        }
-                    }
-                }
-            }
-            return dx.toTensor();
-        }
-        conv3dDerInput(dy, filter, convInfo) {
-            const dx = buffer(convInfo.inShape, 'float32');
-            const dxValues = dx.values;
-            const [dxS0, dxS1, dxS2, dxS3] = dx.strides;
-            const dyValues = this.readSync(dy.dataId);
-            const [dyS0, dyS1, dyS2, dyS3] = dy.strides;
-            const fltValues = this.readSync(filter.dataId);
-            const [fltS0, fltS1, fltS2, fltS3] = filter.strides;
-            const { batchSize, filterDepth, filterHeight, filterWidth, inChannels, inDepth, inHeight, inWidth, outChannels, outDepth, outHeight, outWidth, strideDepth, strideHeight, strideWidth } = convInfo;
-            const frontPad = filterDepth - 1 - convInfo.padInfo.front;
-            const topPad = filterHeight - 1 - convInfo.padInfo.top;
-            const leftPad = filterWidth - 1 - convInfo.padInfo.left;
-            for (let b = 0; b < batchSize; ++b) {
-                for (let d1 = 0; d1 < inChannels; ++d1) {
-                    // Frames of depth
-                    for (let xF = 0; xF < inDepth; ++xF) {
-                        const xFCorner = xF - frontPad;
-                        const xFMin = Math.max(0, Math.ceil(xFCorner / strideDepth));
-                        const yFMax = Math.min(outDepth, (filterDepth + xFCorner) / strideDepth);
-                        // Rows as per standard 2d matrix notation
-                        for (let xR = 0; xR < inHeight; ++xR) {
-                            const xRCorner = xR - topPad;
-                            const xRMin = Math.max(0, Math.ceil(xRCorner / strideHeight));
-                            const yRMax = Math.min(outHeight, (filterHeight + xRCorner) / strideHeight);
-                            // Columns as per standard 2d matrix notation
-                            for (let xC = 0; xC < inWidth; ++xC) {
-                                const xCCorner = xC - leftPad;
-                                const xCMin = Math.max(0, Math.ceil(xCCorner / strideWidth));
-                                const yCMax = Math.min(outWidth, (filterWidth + xCCorner) / strideWidth);
-                                let dotProd = 0;
-                                for (let yF = xFMin; yF < yFMax; ++yF) {
-                                    const wF = yF * strideDepth - xFCorner;
-                                    for (let yR = xRMin; yR < yRMax; ++yR) {
-                                        const wR = yR * strideHeight - xRCorner;
-                                        for (let yC = xCMin; yC < yCMax; ++yC) {
-                                            const wC = yC * strideWidth - xCCorner;
-                                            const dyOffset = dyS0 * b + dyS1 * yF + dyS2 * yR + dyS3 * yC;
-                                            const fltOffset = fltS0 * (filterDepth - 1 - wF) +
-                                                fltS1 * (filterHeight - 1 - wR) +
-                                                fltS2 * (filterWidth - 1 - wC) + fltS3 * d1;
-                                            for (let d2 = 0; d2 < outChannels; ++d2) {
-                                                const pixel = dyValues[dyOffset + d2];
-                                                const weight = fltValues[fltOffset + d2];
-                                                dotProd += pixel * weight;
-                                            }
-                                        }
-                                    }
-                                }
-                                dxValues[dxS0 * b + dxS1 * xF + dxS2 * xR + dxS3 * xC + d1] =
-                                    dotProd;
-                            }
-                        }
-                    }
-                }
-            }
-            return dx.toTensor();
-        }
-        conv2dDerFilter(x, dy, convInfo) {
-            assertNotComplex([x, dy], 'conv2dDerFilter');
-            const strideHeight = convInfo.strideHeight;
-            const strideWidth = convInfo.strideWidth;
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const isChannelsLast = convInfo.dataFormat === 'channelsLast';
-            const dW = buffer(convInfo.filterShape, 'float32');
-            const leftPad = convInfo.padInfo.left;
-            const topPad = convInfo.padInfo.top;
-            const xBuf = this.bufferSync(x);
-            const dyBuf = this.bufferSync(dy);
-            for (let wR = 0; wR < filterHeight; ++wR) {
-                const yRMin = Math.max(0, Math.ceil((topPad - wR) / strideHeight));
-                const yRMax = Math.min(convInfo.outHeight, (convInfo.inHeight + topPad - wR) / strideHeight);
-                for (let wC = 0; wC < filterWidth; ++wC) {
-                    const yCMin = Math.max(0, Math.ceil((leftPad - wC) / strideWidth));
-                    const yCMax = Math.min(convInfo.outWidth, (convInfo.inWidth + leftPad - wC) / strideWidth);
-                    for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
-                        for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
-                            // Need to convolve.
-                            let dotProd = 0;
-                            for (let b = 0; b < convInfo.batchSize; ++b) {
-                                for (let yR = yRMin; yR < yRMax; ++yR) {
-                                    const xR = wR + yR * strideHeight - topPad;
-                                    for (let yC = yCMin; yC < yCMax; ++yC) {
-                                        const xC = wC + yC * strideWidth - leftPad;
-                                        if (isChannelsLast) {
-                                            dotProd +=
-                                                xBuf.get(b, xR, xC, d1) * dyBuf.get(b, yR, yC, d2);
-                                        }
-                                        else {
-                                            dotProd +=
-                                                xBuf.get(b, d1, xR, xC) * dyBuf.get(b, d2, yR, yC);
-                                        }
-                                    }
-                                }
-                            }
-                            dW.set(dotProd, wR, wC, d1, d2);
-                        }
-                    }
-                }
-            }
-            return dW.toTensor();
-        }
-        conv3dDerFilter(x, dy, convInfo) {
-            const strideDepth = convInfo.strideDepth;
-            const strideHeight = convInfo.strideHeight;
-            const strideWidth = convInfo.strideWidth;
-            const filterDepth = convInfo.filterDepth;
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const dw = buffer(convInfo.filterShape, 'float32');
-            const dwValues = dw.values;
-            const [dwS0, dwS1, dwS2, dwS3] = dw.strides;
-            const dyValues = this.readSync(dy.dataId);
-            const [dyS0, dyS1, dyS2, dyS3] = dy.strides;
-            const xValues = this.readSync(x.dataId);
-            const [xS0, xS1, xS2, xS3] = x.strides;
-            const frontPad = convInfo.padInfo.front;
-            const leftPad = convInfo.padInfo.left;
-            const topPad = convInfo.padInfo.top;
-            for (let wF = 0; wF < filterDepth; ++wF) {
-                const yFMin = Math.max(0, Math.ceil((frontPad - wF) / strideDepth));
-                const yFMax = Math.min(convInfo.outDepth, (convInfo.inDepth + frontPad - wF) / strideDepth);
-                const wOffset1 = wF * dwS0;
-                for (let wR = 0; wR < filterHeight; ++wR) {
-                    const yRMin = Math.max(0, Math.ceil((topPad - wR) / strideHeight));
-                    const yRMax = Math.min(convInfo.outHeight, (convInfo.inHeight + topPad - wR) / strideHeight);
-                    const wOffset2 = wR * dwS1 + wOffset1;
-                    for (let wC = 0; wC < filterWidth; ++wC) {
-                        const yCMin = Math.max(0, Math.ceil((leftPad - wC) / strideWidth));
-                        const yCMax = Math.min(convInfo.outWidth, (convInfo.inWidth + leftPad - wC) / strideWidth);
-                        const wOffset3 = wC * dwS2 + wOffset2;
-                        for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
-                            const wOffset4 = d1 * dwS3 + wOffset3;
-                            for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
-                                let dotProd = 0;
-                                for (let b = 0; b < convInfo.batchSize; ++b) {
-                                    const xOffset1 = b * xS0;
-                                    const yOffset1 = b * dyS0;
-                                    for (let yF = yFMin; yF < yFMax; ++yF) {
-                                        const xF = wF + yF * strideDepth - frontPad;
-                                        const xOffset2 = xF * xS1 + xOffset1;
-                                        const yOffset2 = yF * dyS1 + yOffset1;
-                                        for (let yR = yRMin; yR < yRMax; ++yR) {
-                                            const xR = wR + yR * strideHeight - topPad;
-                                            const xOffset3 = xR * xS2 + xOffset2;
-                                            const yOffset3 = yR * dyS2 + yOffset2;
-                                            for (let yC = yCMin; yC < yCMax; ++yC) {
-                                                const xC = wC + yC * strideWidth - leftPad;
-                                                const xOffset4 = xC * xS3 + xOffset3;
-                                                const yOffset4 = yC * dyS3 + yOffset3;
-                                                dotProd +=
-                                                    xValues[xOffset4 + d1] * dyValues[yOffset4 + d2];
-                                            }
-                                        }
-                                    }
-                                }
-                                dwValues[wOffset4 + d2] = dotProd;
-                            }
-                        }
-                    }
-                }
-            }
-            return dw.toTensor();
-        }
-        fusedDepthwiseConv2D({ input, filter, convInfo, bias, activation, preluActivationWeights }) {
-            let result = this.depthwiseConv2D(input, filter, convInfo);
-            if (bias) {
-                // TODO(lina128): Use add directly once fusedDepthwiseConv2D is
-                // modularized.
-                result = add$1(result, bias);
-            }
-            if (activation) {
-                result =
-                    mapActivation(this, result, activation, preluActivationWeights);
-            }
-            return result;
-        }
-        depthwiseConv2D(x, filter, convInfo) {
-            assertNotComplex([x, filter], 'depthwiseConv2D');
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const dilationHeight = convInfo.dilationHeight;
-            const dilationWidth = convInfo.dilationWidth;
-            const padLeft = convInfo.padInfo.left;
-            const padTop = convInfo.padInfo.top;
-            const chMul = convInfo.outChannels / convInfo.inChannels;
-            const y = buffer(convInfo.outShape, x.dtype);
-            const xVals = this.readSync(x.dataId);
-            const wVals = this.readSync(filter.dataId);
-            const yVals = y.values;
-            for (let b = 0; b < convInfo.batchSize; ++b) {
-                const xOffset1 = b * x.strides[0];
-                const yOffset1 = b * y.strides[0];
-                for (let yR = 0; yR < convInfo.outHeight; ++yR) {
-                    const yOffset2 = yOffset1 + yR * y.strides[1];
-                    const xRCorner = yR * convInfo.strideHeight - padLeft;
-                    for (let wR = 0; wR < filterHeight; ++wR) {
-                        const xR = xRCorner + wR * dilationHeight;
-                        if (xR < 0 || xR >= convInfo.inHeight) {
-                            continue;
-                        }
-                        const wOffset1 = wR * filter.strides[0];
-                        const xOffset2 = xOffset1 + xR * x.strides[1];
-                        for (let yC = 0; yC < convInfo.outWidth; ++yC) {
-                            const yOffset3 = yOffset2 + yC * y.strides[2];
-                            const xCCorner = yC * convInfo.strideWidth - padTop;
-                            for (let wC = 0; wC < filterWidth; ++wC) {
-                                const xC = xCCorner + wC * dilationWidth;
-                                if (xC < 0 || xC >= convInfo.inWidth) {
-                                    continue;
-                                }
-                                const wOffset2 = wOffset1 + wC * filter.strides[1];
-                                const xOffset3 = xOffset2 + xC * convInfo.inChannels;
-                                let yOffset4 = yOffset3;
-                                let wOffset3 = wOffset2;
-                                for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
-                                    const xVal = xVals[xOffset3 + d1];
-                                    for (let q = 0; q < chMul; ++q) {
-                                        yVals[yOffset4 + q] += xVal * wVals[wOffset3 + q];
-                                    }
-                                    yOffset4 += chMul;
-                                    wOffset3 += chMul;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return y.toTensor();
-        }
-        depthwiseConv2DDerInput(dy, filter, convInfo) {
-            assertNotComplex([dy, filter], 'depthwiseConv2DDerInput');
-            const dx = buffer(convInfo.inShape, 'float32');
-            const dxValues = dx.values;
-            const [dxS0, dxS1, dxS2] = dx.strides;
-            const dyValues = this.readSync(dy.dataId);
-            const [dyS0, dyS1, dyS2] = dy.strides;
-            const fltValues = this.readSync(filter.dataId);
-            const [fltS0, fltS1, fltS2] = filter.strides;
-            const { batchSize, filterHeight, filterWidth, inChannels, inHeight, inWidth, outChannels, outHeight, outWidth, strideHeight, strideWidth } = convInfo;
-            const topPad = filterHeight - 1 - convInfo.padInfo.top;
-            const leftPad = filterWidth - 1 - convInfo.padInfo.left;
-            const chMul = outChannels / inChannels;
-            for (let b = 0; b < batchSize; ++b) {
-                for (let d1 = 0; d1 < inChannels; ++d1) {
-                    for (let xR = 0; xR < inHeight; ++xR) {
-                        const xRCorner = xR - topPad;
-                        const xRMin = Math.max(0, Math.ceil(xRCorner / strideHeight));
-                        const yRMax = Math.min(outHeight, (filterHeight + xRCorner) / strideHeight);
-                        for (let xC = 0; xC < inWidth; ++xC) {
-                            const xCCorner = xC - leftPad;
-                            const xCMin = Math.max(0, Math.ceil(xCCorner / strideWidth));
-                            const yCMax = Math.min(outWidth, (filterWidth + xCCorner) / strideWidth);
-                            let dotProd = 0;
-                            for (let yR = xRMin; yR < yRMax; ++yR) {
-                                const wR = yR * strideHeight - xRCorner;
-                                for (let yC = xCMin; yC < yCMax; ++yC) {
-                                    const wC = yC * strideWidth - xCCorner;
-                                    const dyOffset = dyS0 * b + dyS1 * yR + dyS2 * yC;
-                                    const fltOffset = fltS0 * (filterHeight - 1 - wR) +
-                                        fltS1 * (filterWidth - 1 - wC) + fltS2 * d1;
-                                    for (let dm = 0; dm < chMul; ++dm) {
-                                        const d2 = d1 * chMul + dm;
-                                        const pixel = dyValues[dyOffset + d2];
-                                        const weight = fltValues[fltOffset + dm];
-                                        dotProd += pixel * weight;
-                                    }
-                                }
-                            }
-                            dxValues[dxS0 * b + dxS1 * xR + dxS2 * xC + d1] = dotProd;
-                        }
-                    }
-                }
-            }
-            return dx.toTensor();
-        }
-        depthwiseConv2DDerFilter(x, dy, convInfo) {
-            assertNotComplex([x, dy], 'depthwiseConv2DDerFilter');
-            const strideHeight = convInfo.strideHeight;
-            const strideWidth = convInfo.strideWidth;
-            const filterHeight = convInfo.filterHeight;
-            const filterWidth = convInfo.filterWidth;
-            const dW = buffer(convInfo.filterShape, 'float32');
-            const leftPad = convInfo.padInfo.left;
-            const topPad = convInfo.padInfo.top;
-            const chMul = convInfo.outChannels / convInfo.inChannels;
-            const xBuf = this.bufferSync(x);
-            const dyBuf = this.bufferSync(dy);
-            for (let wR = 0; wR < filterHeight; ++wR) {
-                const yRMin = Math.max(0, Math.ceil((topPad - wR) / strideHeight));
-                const yRMax = Math.min(convInfo.outHeight, (convInfo.inHeight + topPad - wR) / strideHeight);
-                for (let wC = 0; wC < filterWidth; ++wC) {
-                    const yCMin = Math.max(0, Math.ceil((leftPad - wC) / strideWidth));
-                    const yCMax = Math.min(convInfo.outWidth, (convInfo.inWidth + leftPad - wC) / strideWidth);
-                    for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
-                        const d1 = Math.trunc(d2 / chMul);
-                        const dm = d2 % chMul;
-                        let dotProd = 0;
-                        for (let b = 0; b < convInfo.batchSize; ++b) {
-                            for (let yR = yRMin; yR < yRMax; ++yR) {
-                                const xR = wR + yR * strideHeight - topPad;
-                                for (let yC = yCMin; yC < yCMax; ++yC) {
-                                    const xC = wC + yC * strideWidth - leftPad;
-                                    dotProd += xBuf.get(b, xR, xC, d1) * dyBuf.get(b, yR, yC, d2);
-                                }
-                            }
-                        }
-                        dW.set(dotProd, wR, wC, d1, dm);
-                    }
-                }
-            }
-            return dW.toTensor();
         }
         tile(x, reps) {
             assertNotComplex(x, 'tile');
@@ -52477,18 +52415,14 @@
             const sumDupeIndices = true;
             return this.scatter(indices, updates, shape, outputSize, sliceSize, numUpdates, sliceRank, strides, defaultValue, sumDupeIndices);
         }
-        fill(shape, value, dtype) {
-            dtype = dtype || inferDtype(value);
-            const values = getArrayFromDType(dtype, sizeFromShape(shape));
-            values.fill(value);
-            return engine().makeTensor(values, shape, dtype, this);
-        }
         onesLike(x) {
             if (x.dtype === 'string') {
                 throw new Error('onesLike is not supported for string tensors');
             }
             else {
-                return this.fill(x.shape, 1, x.dtype);
+                // TODO(lina128): Use fill kernel directly once this kernel is
+                // modularized.
+                return fill(x.shape, 1, x.dtype);
             }
         }
         zerosLike(x) {
@@ -52557,7 +52491,7 @@
         }
         return resultValues;
     }
-    const absKernelFunc = (args) => {
+    const abs$1 = (args) => {
         const { x } = args.inputs;
         const cpuBackend = args.backend;
         let resultValues = new Float32Array(sizeFromShape(x.shape));
@@ -52582,7 +52516,7 @@
     const absConfig = {
         kernelName: Abs,
         backendName: 'cpu',
-        kernelFunc: absKernelFunc,
+        kernelFunc: abs$1,
     };
 
     /**
@@ -53065,11 +52999,11 @@
      * =============================================================================
      */
     const ceilImpl = createSimpleUnaryImpl((xi) => Math.ceil(xi));
-    const ceilKernelFunc = unaryKernelFuncFromImpl(Ceil, ceilImpl);
+    const ceil$1 = unaryKernelFuncFromImpl(Ceil, ceilImpl);
     const ceilConfig = {
         kernelName: Ceil,
         backendName: 'cpu',
-        kernelFunc: ceilKernelFunc,
+        kernelFunc: ceil$1,
     };
 
     /**
@@ -53089,11 +53023,11 @@
      * =============================================================================
      */
     const expImpl = createSimpleUnaryImpl((xi) => Math.exp(xi));
-    const expKernelFunc = unaryKernelFuncFromImpl(Exp, expImpl);
+    const exp$1 = unaryKernelFuncFromImpl(Exp, expImpl);
     const expConfig = {
         kernelName: Exp,
         backendName: 'cpu',
-        kernelFunc: expKernelFunc,
+        kernelFunc: exp$1,
     };
 
     /**
@@ -53113,11 +53047,11 @@
      * =============================================================================
      */
     const expm1Impl = createSimpleUnaryImpl((xi) => Math.expm1(xi));
-    const expm1KernelFunc = unaryKernelFuncFromImpl(Expm1, expm1Impl);
+    const expm1$1 = unaryKernelFuncFromImpl(Expm1, expm1Impl);
     const expm1Config = {
         kernelName: Expm1,
         backendName: 'cpu',
-        kernelFunc: expm1KernelFunc,
+        kernelFunc: expm1$1,
     };
 
     /**
@@ -53137,11 +53071,11 @@
      * =============================================================================
      */
     const floorImpl = createSimpleUnaryImpl((xi) => Math.floor(xi));
-    const floorKernelFunc = unaryKernelFuncFromImpl(Floor, floorImpl);
+    const floor$1 = unaryKernelFuncFromImpl(Floor, floorImpl);
     const floorConfig = {
         kernelName: Floor,
         backendName: 'cpu',
-        kernelFunc: floorKernelFunc,
+        kernelFunc: floor$1,
     };
 
     /**
@@ -53161,11 +53095,11 @@
      * =============================================================================
      */
     const logImpl = createSimpleUnaryImpl((xi) => Math.log(xi));
-    const logKernelFunc = unaryKernelFuncFromImpl(Log, logImpl);
+    const log$2 = unaryKernelFuncFromImpl(Log, logImpl);
     const logConfig = {
         kernelName: Log,
         backendName: 'cpu',
-        kernelFunc: logKernelFunc,
+        kernelFunc: log$2,
     };
 
     /**
@@ -53233,6 +53167,30 @@
     /**
      * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const notEqualImpl = createSimpleBinaryKernelImpl(((a, b) => (a !== b) ? 1 : 0));
+    const notEqual$1 = binaryKernelFunc(NotEqual, notEqualImpl, null /* complexOp */, 'bool');
+    const notEqualConfig = {
+        kernelName: NotEqual,
+        backendName: 'cpu',
+        kernelFunc: notEqual$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the License);
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -53247,11 +53205,11 @@
      * =============================================================================
      */
     const rsqrtImpl = createSimpleUnaryImpl((xi) => 1 / Math.sqrt(xi));
-    const rsqrtKernelFunc = unaryKernelFuncFromImpl(Rsqrt, rsqrtImpl);
+    const rsqrt$1 = unaryKernelFuncFromImpl(Rsqrt, rsqrtImpl);
     const rsqrtConfig = {
         kernelName: Rsqrt,
         backendName: 'cpu',
-        kernelFunc: rsqrtKernelFunc,
+        kernelFunc: rsqrt$1,
     };
 
     /**
@@ -53304,6 +53262,33 @@
         kernelName: Slice,
         backendName: 'cpu',
         kernelFunc: slice$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const squaredDifferenceImpl = createSimpleBinaryKernelImpl(((a, b) => {
+        const diff = a - b;
+        return diff * diff;
+    }));
+    const squaredDifference$1 = binaryKernelFunc(SquaredDifference, squaredDifferenceImpl);
+    const squaredDifferenceConfig = {
+        kernelName: SquaredDifference,
+        backendName: 'cpu',
+        kernelFunc: squaredDifference$1
     };
 
     /**
@@ -53541,8 +53526,10 @@
         logImpl: logImpl,
         maxImpl: maxImpl,
         multiplyImpl: multiplyImpl,
+        notEqualImpl: notEqualImpl,
         rsqrtImpl: rsqrtImpl,
         sliceImpl: sliceImpl,
+        squaredDifferenceImpl: squaredDifferenceImpl,
         subImpl: subImpl,
         transposeImpl: transposeImpl,
         uniqueImpl: uniqueImpl
@@ -53583,11 +53570,339 @@
      * limitations under the License.
      * =============================================================================
      */
-    const acosKernelFunc = unaryKernelFunc(Acos, (xi) => Math.acos(xi));
+    const elu$2 = unaryKernelFunc(Elu, (xi) => xi >= 0 ? xi : (Math.exp(xi) - 1));
+    const eluConfig = {
+        kernelName: Elu,
+        backendName: 'cpu',
+        kernelFunc: elu$2,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const preluImpl = createSimpleBinaryKernelImpl((xValue, aValue) => xValue < 0 ? aValue * xValue : xValue);
+    function prelu$1(args) {
+        const { inputs, backend } = args;
+        const { x, alpha } = inputs;
+        assertNotComplex([x, alpha], 'prelu');
+        const aVals = backend.data.get(x.dataId).values;
+        const bVals = backend.data.get(alpha.dataId).values;
+        const [resultData, resultShape] = preluImpl(x.shape, alpha.shape, aVals, bVals, x.dtype);
+        return backend.makeTensorInfo(resultShape, x.dtype, resultData);
+    }
+    const preluConfig = {
+        kernelName: Prelu,
+        backendName: 'cpu',
+        kernelFunc: prelu$1,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const relu$1 = unaryKernelFunc(Relu, (xi) => Math.max(0, xi));
+    const reluConfig = {
+        kernelName: Relu,
+        backendName: 'cpu',
+        kernelFunc: relu$1,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const relu6$1 = unaryKernelFunc(Relu6, (xi) => Math.min(Math.max(0, xi), 6));
+    const relu6Config = {
+        kernelName: Relu6,
+        backendName: 'cpu',
+        kernelFunc: relu6$1,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function applyActivation$1(backend, x, activation, preluActivationWeights) {
+        if (activation === 'linear') {
+            return identity({ inputs: { x }, backend });
+        }
+        else if (activation === 'relu') {
+            return relu$1({ inputs: { x }, backend });
+        }
+        else if (activation === 'elu') {
+            return elu$2({ inputs: { x }, backend });
+        }
+        else if (activation === 'relu6') {
+            return relu6$1({ inputs: { x }, backend });
+        }
+        else if (activation === 'prelu') {
+            return prelu$1({ inputs: { x, alpha: preluActivationWeights }, backend });
+        }
+        throw new Error(`Activation ${activation} has not been implemented for the CPU backend.`);
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function reshape$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { shape } = attrs;
+        const xSize = sizeFromShape(x.shape);
+        const $shape = inferFromImplicitShape(shape, xSize);
+        const $xSize = sizeFromShape($shape);
+        assert(xSize === $xSize, () => `The new shape (${$shape}) has ${$xSize} elements and the old ` +
+            `shape (${x.shape}) has ${xSize} elements. The new shape and old ` +
+            `shape must have the same number of elements.`);
+        backend.incRef(x.dataId);
+        const xData = backend.data.get(x.dataId);
+        if (xData.complexTensorInfos != null) {
+            const real = xData.complexTensorInfos.real;
+            const imag = xData.complexTensorInfos.imag;
+            real.shape = $shape;
+            imag.shape = $shape;
+        }
+        return { dataId: x.dataId, shape: $shape, dtype: x.dtype };
+    }
+    const reshapeConfig = {
+        kernelName: Reshape,
+        backendName: 'cpu',
+        kernelFunc: reshape$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function batchMatMul(args) {
+        const { inputs, backend, attrs } = args;
+        const { a, b } = inputs;
+        const { transposeA, transposeB } = attrs;
+        assertNotComplex([a, b], 'matMul');
+        const aRank = a.shape.length;
+        const bRank = b.shape.length;
+        const innerShapeA = transposeA ? a.shape[aRank - 2] : a.shape[aRank - 1];
+        const innerShapeB = transposeB ? b.shape[bRank - 1] : b.shape[bRank - 2];
+        const outerShapeA = transposeA ? a.shape[aRank - 1] : a.shape[aRank - 2];
+        const outerShapeB = transposeB ? b.shape[bRank - 2] : b.shape[bRank - 1];
+        const outerDimsA = a.shape.slice(0, -2);
+        const outerDimsB = b.shape.slice(0, -2);
+        const batchDimA = sizeFromShape(outerDimsA);
+        const batchDimB = sizeFromShape(outerDimsB);
+        const batchDimsCompatible = batchDimA === batchDimB || batchDimA === 1 || batchDimB === 1;
+        assert(aRank >= 2 && bRank >= 2 && batchDimsCompatible, () => `Error in matMul: the input batch dimensions must either be the ` +
+            `same or at least one input batch dimension must be 1. Got input ` +
+            `batch dimensions of (${outerDimsA}) and (${outerDimsB}).`);
+        const outShapeOuterDims = batchDimA > batchDimB ? a.shape.slice(0, -2) : b.shape.slice(0, -2);
+        const outShape = outShapeOuterDims.concat([outerShapeA, outerShapeB]);
+        assert(innerShapeA === innerShapeB, () => `Error in matMul: inner shapes (${innerShapeA}) and (` +
+            `${innerShapeB}) of Tensors with shapes ${a.shape} and ` +
+            `${b.shape} and transposeA=${transposeA}` +
+            ` and transposeB=${transposeB} must match.`);
+        const a3dShape = transposeA ? [batchDimA, innerShapeA, outerShapeA] :
+            [batchDimA, outerShapeA, innerShapeA];
+        const b3dShape = transposeB ? [batchDimB, outerShapeB, innerShapeB] :
+            [batchDimB, innerShapeB, outerShapeB];
+        // The rest of the implementation is designed to operate on rank-3 tensors
+        const a3d = reshape$1({ inputs: { x: a }, backend, attrs: { shape: a3dShape } });
+        const b3d = reshape$1({ inputs: { x: b }, backend, attrs: { shape: b3dShape } });
+        const sharedDim = transposeA ? a3d.shape[1] : a3d.shape[2];
+        const leftDim = transposeA ? a3d.shape[2] : a3d.shape[1];
+        const rightDim = transposeB ? b3d.shape[1] : b3d.shape[2];
+        const batchDim = Math.max(batchDimA, batchDimB);
+        const a3dValues = backend.data.get(a3d.dataId).values;
+        const b3dValues = backend.data.get(b3d.dataId).values;
+        const a3dStrides = computeStrides(a3d.shape);
+        const b3dStrides = computeStrides(b3d.shape);
+        const [aBatch, aOuterStep, aInnerStep] = transposeA ?
+            [a3dStrides[0], 1, a3dStrides[1]] :
+            [a3dStrides[0], a3dStrides[1], 1];
+        const [bInnerStep, bOuterStep, bBatch] = transposeB ?
+            [1, b3dStrides[1], b3dStrides[0]] :
+            [b3dStrides[1], 1, b3dStrides[0]];
+        const size = leftDim * rightDim;
+        const result = buffer([batchDim, leftDim, rightDim], a3d.dtype);
+        const resVals = result.values;
+        const blockSize = backend.blockSize;
+        for (let bi = 0; bi < batchDim; bi++) {
+            for (let i0 = 0; i0 < leftDim; i0 += blockSize) {
+                for (let j0 = 0; j0 < rightDim; j0 += blockSize) {
+                    for (let k0 = 0; k0 < sharedDim; k0 += blockSize) {
+                        // for when blockSize doesn't evenly divide the input
+                        const iBlock = Math.min(i0 + blockSize, leftDim);
+                        const jBlock = Math.min(j0 + blockSize, rightDim);
+                        const kBlock = Math.min(k0 + blockSize, sharedDim);
+                        for (let i = i0; i < iBlock; i++) {
+                            for (let j = j0; j < jBlock; j++) {
+                                let sum = 0.0;
+                                for (let k = k0; k < kBlock; k++) {
+                                    const batchOffsetA = Math.min(bi, batchDimA - 1) * aBatch;
+                                    const batchOffsetB = Math.min(bi, batchDimB - 1) * bBatch;
+                                    const aVal = a3dValues[batchOffsetA + i * aOuterStep + k * aInnerStep];
+                                    const bVal = b3dValues[k * bInnerStep + j * bOuterStep + batchOffsetB];
+                                    sum += aVal * bVal;
+                                }
+                                resVals[bi * size + (i * rightDim + j)] += sum;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        backend.disposeIntermediateTensorInfo(a3d);
+        backend.disposeIntermediateTensorInfo(b3d);
+        // set correct shape on output.
+        return backend.makeTensorInfo(outShape, result.dtype, result.values);
+    }
+    const batchMatMulConfig = {
+        kernelName: BatchMatMul,
+        backendName: 'cpu',
+        kernelFunc: batchMatMul,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function _fusedMatMul(args) {
+        const { inputs, backend, attrs } = args;
+        const { a, b, bias, preluActivationWeights } = inputs;
+        const { transposeA, transposeB, activation } = attrs;
+        let current;
+        let addRes;
+        let activationRes;
+        const intermediates = [];
+        const matMulRes = batchMatMul({ inputs: { a, b }, attrs: { transposeA, transposeB }, backend });
+        current = matMulRes;
+        if (bias) {
+            addRes = add$2({ inputs: { a: current, b: bias }, backend });
+            intermediates.push(current);
+            current = addRes;
+        }
+        if (activation) {
+            activationRes =
+                applyActivation$1(backend, current, activation, preluActivationWeights);
+            intermediates.push(current);
+            current = activationRes;
+        }
+        for (const i of intermediates) {
+            backend.disposeIntermediateTensorInfo(i);
+        }
+        return current;
+    }
+    const _fusedMatMulConfig = {
+        kernelName: _FusedMatMul,
+        backendName: 'cpu',
+        kernelFunc: _fusedMatMul,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the License);
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an AS IS BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const acos$1 = unaryKernelFunc(Acos, (xi) => Math.acos(xi));
     const acosConfig = {
         kernelName: Acos,
         backendName: 'cpu',
-        kernelFunc: acosKernelFunc,
+        kernelFunc: acos$1,
     };
 
     /**
@@ -53606,11 +53921,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const acoshKernelFunc = unaryKernelFunc(Acosh, (xi) => Math.acosh(xi));
+    const acosh$1 = unaryKernelFunc(Acosh, (xi) => Math.acosh(xi));
     const acoshConfig = {
         kernelName: Acosh,
         backendName: 'cpu',
-        kernelFunc: acoshKernelFunc,
+        kernelFunc: acosh$1,
     };
 
     /**
@@ -53629,11 +53944,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const asinKernelFunc = unaryKernelFunc(Asin, (xi) => Math.asin(xi));
+    const asin$1 = unaryKernelFunc(Asin, (xi) => Math.asin(xi));
     const asinConfig = {
         kernelName: Asin,
         backendName: 'cpu',
-        kernelFunc: asinKernelFunc,
+        kernelFunc: asin$1,
     };
 
     /**
@@ -53652,11 +53967,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const asinhKernelFunc = unaryKernelFunc(Asinh, (xi) => Math.asinh(xi));
+    const asinh$1 = unaryKernelFunc(Asinh, (xi) => Math.asinh(xi));
     const asinhConfig = {
         kernelName: Asinh,
         backendName: 'cpu',
-        kernelFunc: asinhKernelFunc,
+        kernelFunc: asinh$1,
     };
 
     /**
@@ -53675,11 +53990,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const atanKernelFunc = unaryKernelFunc(Atan, (xi) => Math.atan(xi));
+    const atan$1 = unaryKernelFunc(Atan, (xi) => Math.atan(xi));
     const atanConfig = {
         kernelName: Atan,
         backendName: 'cpu',
-        kernelFunc: atanKernelFunc,
+        kernelFunc: atan$1,
     };
 
     /**
@@ -53698,11 +54013,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const atanhKernelFunc = unaryKernelFunc(Atanh, (xi) => Math.atanh(xi));
+    const atanh$1 = unaryKernelFunc(Atanh, (xi) => Math.atanh(xi));
     const atanhConfig = {
         kernelName: Atanh,
         backendName: 'cpu',
-        kernelFunc: atanhKernelFunc,
+        kernelFunc: atanh$1,
     };
 
     /**
@@ -53971,7 +54286,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    function batchNormKernelFunc(args) {
+    function batchNorm$1(args) {
         const { inputs, backend, attrs } = args;
         const { x, scale, offset, mean, variance } = inputs;
         assert(mean.shape.length === variance.shape.length, () => 'Batch normalization gradient requires mean and variance to have ' +
@@ -54024,7 +54339,7 @@
     const batchNormConfig = {
         kernelName: FusedBatchNorm,
         backendName: 'cpu',
-        kernelFunc: batchNormKernelFunc,
+        kernelFunc: batchNorm$1,
     };
 
     /**
@@ -54043,7 +54358,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const clipKernelFunc = unaryKernelFunc(ClipByValue, (xi, attrs) => {
+    const clip = unaryKernelFunc(ClipByValue, (xi, attrs) => {
         const clipAttrs = attrs;
         if (xi > clipAttrs.clipValueMax) {
             return clipAttrs.clipValueMax;
@@ -54053,7 +54368,7 @@
     const clipConfig = {
         kernelName: ClipByValue,
         backendName: 'cpu',
-        kernelFunc: clipKernelFunc,
+        kernelFunc: clip,
     };
 
     /**
@@ -54104,48 +54419,6 @@
      * limitations under the License.
      * =============================================================================
      */
-    function reshape$1(args) {
-        const { inputs, backend, attrs } = args;
-        const { x } = inputs;
-        const { shape } = attrs;
-        const xSize = sizeFromShape(x.shape);
-        const $shape = inferFromImplicitShape(shape, xSize);
-        const $xSize = sizeFromShape($shape);
-        assert(xSize === $xSize, () => `The new shape (${$shape}) has ${$xSize} elements and the old ` +
-            `shape (${x.shape}) has ${xSize} elements. The new shape and old ` +
-            `shape must have the same number of elements.`);
-        backend.incRef(x.dataId);
-        const xData = backend.data.get(x.dataId);
-        if (xData.complexTensorInfos != null) {
-            const real = xData.complexTensorInfos.real;
-            const imag = xData.complexTensorInfos.imag;
-            real.shape = $shape;
-            imag.shape = $shape;
-        }
-        return { dataId: x.dataId, shape: $shape, dtype: x.dtype };
-    }
-    const reshapeConfig = {
-        kernelName: Reshape,
-        backendName: 'cpu',
-        kernelFunc: reshape$1
-    };
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
     function concat$1(args) {
         const { inputs, backend, attrs } = args;
         const { axis } = attrs;
@@ -54164,8 +54437,8 @@
         if ($inputs[0].dtype === 'complex64') {
             const reals = $inputs.map((t) => real$1({ inputs: { input: t }, backend }));
             const imags = $inputs.map((t) => imag$1({ inputs: { input: t }, backend }));
-            const realConcated = concat$1({ inputs: reals, backend, attrs: { axis } });
-            const imagConcated = concat$1({ inputs: imags, backend, attrs: { axis } });
+            const realConcated = concat$1({ inputs: reals, backend, attrs: { axis: $axis } });
+            const imagConcated = concat$1({ inputs: imags, backend, attrs: { axis: $axis } });
             const result = complex$1({ inputs: { real: realConcated, imag: imagConcated }, backend });
             reals.forEach(r => backend.disposeIntermediateTensorInfo(r));
             imags.forEach(i => backend.disposeIntermediateTensorInfo(i));
@@ -54240,11 +54513,517 @@
      * limitations under the License.
      * =============================================================================
      */
-    const cosKernelFunc = unaryKernelFunc(Cos, (xi) => Math.cos(xi));
+    function conv2D(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, filter } = inputs;
+        const { strides, pad, dataFormat, dilations, dimRoundingMode } = attrs;
+        assertNotComplex([x, filter], 'conv2d');
+        const $dataFormat = convertConv2DDataFormat(dataFormat);
+        const convInfo = computeConv2DInfo(x.shape, filter.shape, strides, dilations, pad, dimRoundingMode, false /* depthwise */, $dataFormat);
+        const filterHeight = convInfo.filterHeight;
+        const filterWidth = convInfo.filterWidth;
+        const dilationHeight = convInfo.dilationHeight;
+        const dilationWidth = convInfo.dilationWidth;
+        const padLeft = convInfo.padInfo.left;
+        const padTop = convInfo.padInfo.top;
+        const isChannelsLast = convInfo.dataFormat === 'channelsLast';
+        const y = new TensorBuffer(convInfo.outShape, x.dtype);
+        const xStrides = computeStrides(x.shape);
+        const filterStrides = computeStrides(filter.shape);
+        const xBatchStride = xStrides[0];
+        const xRowStride = isChannelsLast ? xStrides[1] : xStrides[2];
+        const xColStride = isChannelsLast ? xStrides[2] : 1;
+        const xChannelStride = isChannelsLast ? 1 : xStrides[1];
+        const yBatchStride = y.strides[0];
+        const yRowStride = isChannelsLast ? y.strides[1] : y.strides[2];
+        const yColStride = isChannelsLast ? y.strides[2] : 1;
+        const yChannelStride = isChannelsLast ? 1 : y.strides[1];
+        const xVals = backend.data.get(x.dataId).values;
+        const wVals = backend.data.get(filter.dataId).values;
+        const yVals = y.values;
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            const xOffset1 = b * xBatchStride;
+            const yOffset1 = b * yBatchStride;
+            for (let yR = 0; yR < convInfo.outHeight; ++yR) {
+                const yOffset2 = yOffset1 + yR * yRowStride;
+                const xRCorner = yR * convInfo.strideHeight - padTop;
+                for (let wR = 0; wR < filterHeight; ++wR) {
+                    const xR = xRCorner + wR * dilationHeight;
+                    if (xR < 0 || xR >= convInfo.inHeight) {
+                        continue;
+                    }
+                    const wOffset1 = wR * filterStrides[0];
+                    const xOffset2 = xOffset1 + xR * xRowStride;
+                    for (let yC = 0; yC < convInfo.outWidth; ++yC) {
+                        const yOffset3 = yOffset2 + yC * yColStride;
+                        const xCCorner = yC * convInfo.strideWidth - padLeft;
+                        for (let wC = 0; wC < filterWidth; ++wC) {
+                            const xC = xCCorner + wC * dilationWidth;
+                            if (xC < 0 || xC >= convInfo.inWidth) {
+                                continue;
+                            }
+                            const wOffset2 = wOffset1 + wC * filterStrides[1];
+                            const xOffset3 = xOffset2 + xC * xColStride;
+                            let wOffset3 = wOffset2;
+                            for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
+                                const xVal = xVals[xOffset3 + d1 * xChannelStride];
+                                for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
+                                    yVals[yOffset3 + d2 * yChannelStride] +=
+                                        xVal * wVals[wOffset3 + d2];
+                                }
+                                wOffset3 += convInfo.outChannels;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(y.shape, y.dtype, yVals);
+    }
+    const conv2DConfig = {
+        kernelName: Conv2D,
+        backendName: 'cpu',
+        kernelFunc: conv2D
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function conv2DBackpropFilter$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, dy } = inputs;
+        const { strides, pad, dataFormat, dimRoundingMode, filterShape } = attrs;
+        assertNotComplex([x, dy], 'conv2dBackpropFilter');
+        const $dataFormat = convertConv2DDataFormat(dataFormat);
+        const convInfo = computeConv2DInfo(x.shape, filterShape, strides, 1 /* dilations */, pad, dimRoundingMode, false /* depthwise */, $dataFormat);
+        const { strideHeight, strideWidth, filterHeight, filterWidth } = convInfo;
+        const isChannelsLast = convInfo.dataFormat === 'channelsLast';
+        const dW = new TensorBuffer(convInfo.filterShape, 'float32');
+        const leftPad = convInfo.padInfo.left;
+        const topPad = convInfo.padInfo.top;
+        const xVals = backend.data.get(x.dataId).values;
+        const dyVals = backend.data.get(dy.dataId).values;
+        const xBuf = new TensorBuffer(x.shape, x.dtype, xVals);
+        const dyBuf = new TensorBuffer(dy.shape, dy.dtype, dyVals);
+        for (let wR = 0; wR < filterHeight; ++wR) {
+            const yRMin = Math.max(0, Math.ceil((topPad - wR) / strideHeight));
+            const yRMax = Math.min(convInfo.outHeight, (convInfo.inHeight + topPad - wR) / strideHeight);
+            for (let wC = 0; wC < filterWidth; ++wC) {
+                const yCMin = Math.max(0, Math.ceil((leftPad - wC) / strideWidth));
+                const yCMax = Math.min(convInfo.outWidth, (convInfo.inWidth + leftPad - wC) / strideWidth);
+                for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
+                    for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
+                        let dotProd = 0;
+                        for (let b = 0; b < convInfo.batchSize; ++b) {
+                            for (let yR = yRMin; yR < yRMax; ++yR) {
+                                const xR = wR + yR * strideHeight - topPad;
+                                for (let yC = yCMin; yC < yCMax; ++yC) {
+                                    const xC = wC + yC * strideWidth - leftPad;
+                                    if (isChannelsLast) {
+                                        dotProd += xBuf.get(b, xR, xC, d1) *
+                                            dyBuf.get(b, yR, yC, d2);
+                                    }
+                                    else {
+                                        dotProd += xBuf.get(b, d1, xR, xC) *
+                                            dyBuf.get(b, d2, yR, yC);
+                                    }
+                                }
+                            }
+                        }
+                        dW.set(dotProd, wR, wC, d1, d2);
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dW.shape, dW.dtype, dW.values);
+    }
+    const conv2DBackpropFilterConfig = {
+        kernelName: Conv2DBackpropFilter,
+        backendName: 'cpu',
+        kernelFunc: conv2DBackpropFilter$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function conv2DBackpropInput$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, filter } = inputs;
+        const { inputShape, strides, pad, dataFormat, dimRoundingMode } = attrs;
+        assertNotComplex([dy, filter], 'conv2dBackpropInput');
+        const filterStrides = computeStrides(filter.shape);
+        const dyStrides = computeStrides(dy.shape);
+        let $dataFormat = convertConv2DDataFormat(dataFormat);
+        const convInfo = computeConv2DInfo(inputShape, filter.shape, strides, 1 /* dilations */, pad, dimRoundingMode, false, $dataFormat);
+        const dx = new TensorBuffer(convInfo.inShape, 'float32');
+        const dxValues = dx.values;
+        const dyValues = backend.data.get(dy.dataId).values;
+        const fltValues = backend.data.get(filter.dataId).values;
+        const [fltS0, fltS1, fltS2] = filterStrides;
+        const { batchSize, filterHeight, filterWidth, inChannels, inHeight, inWidth, outChannels, outHeight, outWidth, strideHeight, strideWidth } = convInfo;
+        $dataFormat = convInfo.dataFormat;
+        const topPad = filterHeight - 1 - convInfo.padInfo.top;
+        const leftPad = filterWidth - 1 - convInfo.padInfo.left;
+        const isChannelsLast = $dataFormat === 'channelsLast';
+        const xBatchStride = dx.strides[0];
+        const xRowStride = isChannelsLast ? dx.strides[1] : dx.strides[2];
+        const xColStride = isChannelsLast ? dx.strides[2] : 1;
+        const xChannelStride = isChannelsLast ? 1 : dx.strides[1];
+        const yBatchStride = dyStrides[0];
+        const yRowStride = isChannelsLast ? dyStrides[1] : dyStrides[2];
+        const yColStride = isChannelsLast ? dyStrides[2] : 1;
+        const yChannelStride = isChannelsLast ? 1 : dyStrides[1];
+        for (let b = 0; b < batchSize; ++b) {
+            for (let d1 = 0; d1 < inChannels; ++d1) {
+                for (let xR = 0; xR < inHeight; ++xR) {
+                    const xRCorner = xR - topPad;
+                    const xRMin = Math.max(0, Math.ceil(xRCorner / strideHeight));
+                    const yRMax = Math.min(outHeight, (filterHeight + xRCorner) / strideHeight);
+                    for (let xC = 0; xC < inWidth; ++xC) {
+                        const xCCorner = xC - leftPad;
+                        const xCMin = Math.max(0, Math.ceil(xCCorner / strideWidth));
+                        const yCMax = Math.min(outWidth, (filterWidth + xCCorner) / strideWidth);
+                        let dotProd = 0;
+                        for (let yR = xRMin; yR < yRMax; ++yR) {
+                            const wR = yR * strideHeight - xRCorner;
+                            for (let yC = xCMin; yC < yCMax; ++yC) {
+                                const wC = yC * strideWidth - xCCorner;
+                                const dyOffset = yBatchStride * b + yRowStride * yR + yColStride * yC;
+                                const fltOffset = fltS0 * (filterHeight - 1 - wR) +
+                                    fltS1 * (filterWidth - 1 - wC) + fltS2 * d1;
+                                for (let d2 = 0; d2 < outChannels; ++d2) {
+                                    const pixel = dyValues[dyOffset + yChannelStride * d2];
+                                    const weight = fltValues[fltOffset + d2];
+                                    dotProd += pixel * weight;
+                                }
+                            }
+                        }
+                        const dxOffset = xBatchStride * b + xRowStride * xR +
+                            xColStride * xC + xChannelStride * d1;
+                        dxValues[dxOffset] = dotProd;
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dx.shape, dx.dtype, dx.values);
+    }
+    const conv2DBackpropInputConfig = {
+        kernelName: Conv2DBackpropInput,
+        backendName: 'cpu',
+        kernelFunc: conv2DBackpropInput$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function conv3D(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, filter } = inputs;
+        const { strides, pad, dilations } = attrs;
+        assertNotComplex([x, filter], 'conv3d');
+        const convInfo = computeConv3DInfo(x.shape, filter.shape, strides, dilations, pad);
+        const { filterDepth, filterHeight, filterWidth, dilationDepth, dilationHeight, dilationWidth, padInfo } = convInfo;
+        const padFront = padInfo.front;
+        const padLeft = padInfo.left;
+        const padTop = padInfo.top;
+        const y = new TensorBuffer(convInfo.outShape, x.dtype);
+        const xVals = backend.data.get(x.dataId).values;
+        const wVals = backend.data.get(filter.dataId).values;
+        const yVals = y.values;
+        const xStrides = computeStrides(x.shape);
+        const filterStrides = computeStrides(filter.shape);
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            const xOffset1 = b * xStrides[0];
+            const yOffset1 = b * y.strides[0];
+            for (let yF = 0; yF < convInfo.outDepth; ++yF) {
+                const yOffset2 = yOffset1 + yF * y.strides[1];
+                const xFCorner = yF * convInfo.strideDepth - padFront;
+                for (let wF = 0; wF < filterDepth; ++wF) {
+                    const xF = xFCorner + wF * dilationDepth;
+                    if (xF < 0 || xF >= convInfo.inDepth) {
+                        continue;
+                    }
+                    const wOffset1 = wF * filterStrides[0];
+                    const xOffset2 = xOffset1 + xF * xStrides[1];
+                    for (let yR = 0; yR < convInfo.outHeight; ++yR) {
+                        const yOffset3 = yOffset2 + yR * y.strides[2];
+                        const xRCorner = yR * convInfo.strideHeight - padTop;
+                        for (let wR = 0; wR < filterHeight; ++wR) {
+                            const xR = xRCorner + wR * dilationHeight;
+                            if (xR < 0 || xR >= convInfo.inHeight) {
+                                continue;
+                            }
+                            const wOffset2 = wOffset1 + wR * filterStrides[1];
+                            const xOffset3 = xOffset2 + xR * xStrides[2];
+                            for (let yC = 0; yC < convInfo.outWidth; ++yC) {
+                                const yOffset4 = yOffset3 + yC * convInfo.outChannels;
+                                const xCCorner = yC * convInfo.strideWidth - padLeft;
+                                for (let wC = 0; wC < filterWidth; ++wC) {
+                                    const xC = xCCorner + wC * dilationWidth;
+                                    if (xC < 0 || xC >= convInfo.inWidth) {
+                                        continue;
+                                    }
+                                    const wOffset3 = wOffset2 + wC * filterStrides[2];
+                                    const xOffset4 = xOffset3 + xC * convInfo.inChannels;
+                                    let wOffset4 = wOffset3;
+                                    for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
+                                        const xVal = xVals[xOffset4 + d1];
+                                        for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
+                                            yVals[yOffset4 + d2] += xVal * wVals[wOffset4 + d2];
+                                        }
+                                        wOffset4 += convInfo.outChannels;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(y.shape, y.dtype, y.values);
+    }
+    const conv3DConfig = {
+        kernelName: Conv3D,
+        backendName: 'cpu',
+        kernelFunc: conv3D
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function conv3DBackpropFilterV2(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, dy } = inputs;
+        const { strides, pad, filterShape } = attrs;
+        assertNotComplex([x, dy], 'conv3dBackpropFilterV2');
+        const xStrides = computeStrides(x.shape);
+        const dyStrides = computeStrides(dy.shape);
+        const convInfo = computeConv3DInfo(x.shape, filterShape, strides, 1 /* dilations */, pad);
+        const strideDepth = convInfo.strideDepth;
+        const strideHeight = convInfo.strideHeight;
+        const strideWidth = convInfo.strideWidth;
+        const filterDepth = convInfo.filterDepth;
+        const filterHeight = convInfo.filterHeight;
+        const filterWidth = convInfo.filterWidth;
+        const dw = new TensorBuffer(convInfo.filterShape, 'float32');
+        const dwValues = dw.values;
+        const [dwS0, dwS1, dwS2, dwS3] = dw.strides;
+        const dyValues = backend.data.get(dy.dataId).values;
+        const [dyS0, dyS1, dyS2, dyS3] = dyStrides;
+        const xValues = backend.data.get(x.dataId).values;
+        const [xS0, xS1, xS2, xS3] = xStrides;
+        const frontPad = convInfo.padInfo.front;
+        const leftPad = convInfo.padInfo.left;
+        const topPad = convInfo.padInfo.top;
+        for (let wF = 0; wF < filterDepth; ++wF) {
+            const yFMin = Math.max(0, Math.ceil((frontPad - wF) / strideDepth));
+            const yFMax = Math.min(convInfo.outDepth, (convInfo.inDepth + frontPad - wF) / strideDepth);
+            const wOffset1 = wF * dwS0;
+            for (let wR = 0; wR < filterHeight; ++wR) {
+                const yRMin = Math.max(0, Math.ceil((topPad - wR) / strideHeight));
+                const yRMax = Math.min(convInfo.outHeight, (convInfo.inHeight + topPad - wR) / strideHeight);
+                const wOffset2 = wR * dwS1 + wOffset1;
+                for (let wC = 0; wC < filterWidth; ++wC) {
+                    const yCMin = Math.max(0, Math.ceil((leftPad - wC) / strideWidth));
+                    const yCMax = Math.min(convInfo.outWidth, (convInfo.inWidth + leftPad - wC) / strideWidth);
+                    const wOffset3 = wC * dwS2 + wOffset2;
+                    for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
+                        const wOffset4 = d1 * dwS3 + wOffset3;
+                        for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
+                            let dotProd = 0;
+                            for (let b = 0; b < convInfo.batchSize; ++b) {
+                                const xOffset1 = b * xS0;
+                                const yOffset1 = b * dyS0;
+                                for (let yF = yFMin; yF < yFMax; ++yF) {
+                                    const xF = wF + yF * strideDepth - frontPad;
+                                    const xOffset2 = xF * xS1 + xOffset1;
+                                    const yOffset2 = yF * dyS1 + yOffset1;
+                                    for (let yR = yRMin; yR < yRMax; ++yR) {
+                                        const xR = wR + yR * strideHeight - topPad;
+                                        const xOffset3 = xR * xS2 + xOffset2;
+                                        const yOffset3 = yR * dyS2 + yOffset2;
+                                        for (let yC = yCMin; yC < yCMax; ++yC) {
+                                            const xC = wC + yC * strideWidth - leftPad;
+                                            const xOffset4 = xC * xS3 + xOffset3;
+                                            const yOffset4 = yC * dyS3 + yOffset3;
+                                            dotProd += xValues[xOffset4 + d1] * dyValues[yOffset4 + d2];
+                                        }
+                                    }
+                                }
+                            }
+                            dwValues[wOffset4 + d2] = dotProd;
+                        }
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dw.shape, dw.dtype, dw.values);
+    }
+    const conv3DBackpropFilterV2Config = {
+        kernelName: Conv3DBackpropFilterV2,
+        backendName: 'cpu',
+        kernelFunc: conv3DBackpropFilterV2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function conv3DBackpropInputV2(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, filter } = inputs;
+        const { pad, strides, inputShape } = attrs;
+        assertNotComplex([dy], 'conv3dBackpropInputV2');
+        const dyStrides = computeStrides(dy.shape);
+        const filterStrides = computeStrides(filter.shape);
+        const convInfo = computeConv3DInfo(inputShape, filter.shape, strides, 1 /* dilations */, pad);
+        const dx = new TensorBuffer(convInfo.inShape, 'float32');
+        const dxValues = dx.values;
+        const [dxS0, dxS1, dxS2, dxS3] = dx.strides;
+        const dyValues = backend.data.get(dy.dataId).values;
+        const [dyS0, dyS1, dyS2, dyS3] = dyStrides;
+        const fltValues = backend.data.get(filter.dataId).values;
+        const [fltS0, fltS1, fltS2, fltS3] = filterStrides;
+        const { batchSize, filterDepth, filterHeight, filterWidth, inChannels, inDepth, inHeight, inWidth, outChannels, outDepth, outHeight, outWidth, strideDepth, strideHeight, strideWidth } = convInfo;
+        const frontPad = filterDepth - 1 - convInfo.padInfo.front;
+        const topPad = filterHeight - 1 - convInfo.padInfo.top;
+        const leftPad = filterWidth - 1 - convInfo.padInfo.left;
+        for (let b = 0; b < batchSize; ++b) {
+            for (let d1 = 0; d1 < inChannels; ++d1) {
+                // Frames of depth
+                for (let xF = 0; xF < inDepth; ++xF) {
+                    const xFCorner = xF - frontPad;
+                    const xFMin = Math.max(0, Math.ceil(xFCorner / strideDepth));
+                    const yFMax = Math.min(outDepth, (filterDepth + xFCorner) / strideDepth);
+                    // Rows as per standard 2d matrix notation
+                    for (let xR = 0; xR < inHeight; ++xR) {
+                        const xRCorner = xR - topPad;
+                        const xRMin = Math.max(0, Math.ceil(xRCorner / strideHeight));
+                        const yRMax = Math.min(outHeight, (filterHeight + xRCorner) / strideHeight);
+                        // Columns as per standard 2d matrix notation
+                        for (let xC = 0; xC < inWidth; ++xC) {
+                            const xCCorner = xC - leftPad;
+                            const xCMin = Math.max(0, Math.ceil(xCCorner / strideWidth));
+                            const yCMax = Math.min(outWidth, (filterWidth + xCCorner) / strideWidth);
+                            let dotProd = 0;
+                            for (let yF = xFMin; yF < yFMax; ++yF) {
+                                const wF = yF * strideDepth - xFCorner;
+                                for (let yR = xRMin; yR < yRMax; ++yR) {
+                                    const wR = yR * strideHeight - xRCorner;
+                                    for (let yC = xCMin; yC < yCMax; ++yC) {
+                                        const wC = yC * strideWidth - xCCorner;
+                                        const dyOffset = dyS0 * b + dyS1 * yF + dyS2 * yR + dyS3 * yC;
+                                        const fltOffset = fltS0 * (filterDepth - 1 - wF) +
+                                            fltS1 * (filterHeight - 1 - wR) +
+                                            fltS2 * (filterWidth - 1 - wC) + fltS3 * d1;
+                                        for (let d2 = 0; d2 < outChannels; ++d2) {
+                                            const pixel = dyValues[dyOffset + d2];
+                                            const weight = fltValues[fltOffset + d2];
+                                            dotProd += pixel * weight;
+                                        }
+                                    }
+                                }
+                            }
+                            dxValues[dxS0 * b + dxS1 * xF + dxS2 * xR + dxS3 * xC + d1] =
+                                dotProd;
+                        }
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dx.shape, dx.dtype, dx.values);
+    }
+    const conv3DBackpropInputV2Config = {
+        kernelName: Conv3DBackpropInputV2,
+        backendName: 'cpu',
+        kernelFunc: conv3DBackpropInputV2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const cos$1 = unaryKernelFunc(Cos, (xi) => Math.cos(xi));
     const cosConfig = {
         kernelName: Cos,
         backendName: 'cpu',
-        kernelFunc: cosKernelFunc,
+        kernelFunc: cos$1,
     };
 
     /**
@@ -54263,11 +55042,232 @@
      * limitations under the License.
      * =============================================================================
      */
-    const coshKernelFunc = unaryKernelFunc(Cosh, (xi) => Math.cosh(xi));
+    const cosh$1 = unaryKernelFunc(Cosh, (xi) => Math.cosh(xi));
     const coshConfig = {
         kernelName: Cosh,
         backendName: 'cpu',
-        kernelFunc: coshKernelFunc,
+        kernelFunc: cosh$1,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function depthwiseConv2dNative(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, filter } = inputs;
+        const { strides, pad, dilations, dimRoundingMode } = attrs;
+        assertNotComplex([x, filter], 'depthwiseConv2DNative');
+        const xStrides = computeStrides(x.shape);
+        const filterStrides = computeStrides(filter.shape);
+        let $dilations = dilations;
+        if ($dilations == null) {
+            $dilations = [1, 1];
+        }
+        assert(eitherStridesOrDilationsAreOne(strides, $dilations), () => 'Error in depthwiseConv2d: Either strides or dilations must be ' +
+            `1. Got strides ${strides} and dilations '${$dilations}'`);
+        const convInfo = computeConv2DInfo(x.shape, filter.shape, strides, $dilations, pad, dimRoundingMode, true /* depthwise */);
+        const { filterHeight, filterWidth, dilationHeight, dilationWidth, padInfo } = convInfo;
+        const padLeft = padInfo.left;
+        const padTop = padInfo.top;
+        const chMul = convInfo.outChannels / convInfo.inChannels;
+        const y = new TensorBuffer(convInfo.outShape, x.dtype);
+        const xVals = backend.data.get(x.dataId).values;
+        const wVals = backend.data.get(filter.dataId).values;
+        const yVals = y.values;
+        for (let b = 0; b < convInfo.batchSize; ++b) {
+            const xOffset1 = b * xStrides[0];
+            const yOffset1 = b * y.strides[0];
+            for (let yR = 0; yR < convInfo.outHeight; ++yR) {
+                const yOffset2 = yOffset1 + yR * y.strides[1];
+                const xRCorner = yR * convInfo.strideHeight - padLeft;
+                for (let wR = 0; wR < filterHeight; ++wR) {
+                    const xR = xRCorner + wR * dilationHeight;
+                    if (xR < 0 || xR >= convInfo.inHeight) {
+                        continue;
+                    }
+                    const wOffset1 = wR * filterStrides[0];
+                    const xOffset2 = xOffset1 + xR * xStrides[1];
+                    for (let yC = 0; yC < convInfo.outWidth; ++yC) {
+                        const yOffset3 = yOffset2 + yC * y.strides[2];
+                        const xCCorner = yC * convInfo.strideWidth - padTop;
+                        for (let wC = 0; wC < filterWidth; ++wC) {
+                            const xC = xCCorner + wC * dilationWidth;
+                            if (xC < 0 || xC >= convInfo.inWidth) {
+                                continue;
+                            }
+                            const wOffset2 = wOffset1 + wC * filterStrides[1];
+                            const xOffset3 = xOffset2 + xC * convInfo.inChannels;
+                            let yOffset4 = yOffset3;
+                            let wOffset3 = wOffset2;
+                            for (let d1 = 0; d1 < convInfo.inChannels; ++d1) {
+                                const xVal = xVals[xOffset3 + d1];
+                                for (let q = 0; q < chMul; ++q) {
+                                    yVals[yOffset4 + q] += xVal * wVals[wOffset3 + q];
+                                }
+                                yOffset4 += chMul;
+                                wOffset3 += chMul;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(y.shape, y.dtype, y.values);
+    }
+    const depthwiseConv2dNativeConfig = {
+        kernelName: DepthwiseConv2dNative,
+        backendName: 'cpu',
+        kernelFunc: depthwiseConv2dNative
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function depthwiseConv2dNativeBackpropFilter$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, dy } = inputs;
+        const { strides, dilations, pad, dimRoundingMode, filterShape } = attrs;
+        assertNotComplex([x, dy], 'depthwiseConv2dNativeBackpropFilter');
+        const convInfo = computeConv2DInfo(x.shape, filterShape, strides, dilations, pad, dimRoundingMode, true /* depthwise */);
+        const { strideHeight, strideWidth, filterHeight, filterWidth } = convInfo;
+        const dW = new TensorBuffer(convInfo.filterShape, 'float32');
+        const leftPad = convInfo.padInfo.left;
+        const topPad = convInfo.padInfo.top;
+        const chMul = convInfo.outChannels / convInfo.inChannels;
+        const xVals = backend.data.get(x.dataId).values;
+        const xBuf = new TensorBuffer(x.shape, x.dtype, xVals);
+        const dyVals = backend.data.get(dy.dataId).values;
+        const dyBuf = new TensorBuffer(dy.shape, dy.dtype, dyVals);
+        for (let wR = 0; wR < filterHeight; ++wR) {
+            const yRMin = Math.max(0, Math.ceil((topPad - wR) / strideHeight));
+            const yRMax = Math.min(convInfo.outHeight, (convInfo.inHeight + topPad - wR) / strideHeight);
+            for (let wC = 0; wC < filterWidth; ++wC) {
+                const yCMin = Math.max(0, Math.ceil((leftPad - wC) / strideWidth));
+                const yCMax = Math.min(convInfo.outWidth, (convInfo.inWidth + leftPad - wC) / strideWidth);
+                for (let d2 = 0; d2 < convInfo.outChannels; ++d2) {
+                    const d1 = Math.trunc(d2 / chMul);
+                    const dm = d2 % chMul;
+                    let dotProd = 0;
+                    for (let b = 0; b < convInfo.batchSize; ++b) {
+                        for (let yR = yRMin; yR < yRMax; ++yR) {
+                            const xR = wR + yR * strideHeight - topPad;
+                            for (let yC = yCMin; yC < yCMax; ++yC) {
+                                const xC = wC + yC * strideWidth - leftPad;
+                                dotProd += xBuf.get(b, xR, xC, d1) *
+                                    dyBuf.get(b, yR, yC, d2);
+                            }
+                        }
+                    }
+                    dW.set(dotProd, wR, wC, d1, dm);
+                }
+            }
+        }
+        return backend.makeTensorInfo(dW.shape, dW.dtype, dW.values);
+    }
+    const depthwiseConv2dNativeBackpropFilterConfig = {
+        kernelName: DepthwiseConv2dNativeBackpropFilter,
+        backendName: 'cpu',
+        kernelFunc: depthwiseConv2dNativeBackpropFilter$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function depthwiseConv2dNativeBackpropInput$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { dy, filter } = inputs;
+        const { strides, dilations, pad, dimRoundingMode, inputShape } = attrs;
+        assertNotComplex([dy, filter], 'depthwiseConv2DNativeBackpropInput');
+        const dyStrides = computeStrides(dy.shape);
+        const filterStrides = computeStrides(filter.shape);
+        const convInfo = computeConv2DInfo(inputShape, filter.shape, strides, dilations, pad, dimRoundingMode, true /* depthwise */);
+        const dx = new TensorBuffer(convInfo.inShape, 'float32');
+        const dxValues = dx.values;
+        const [dxS0, dxS1, dxS2] = dx.strides;
+        const dyValues = backend.data.get(dy.dataId).values;
+        const [dyS0, dyS1, dyS2] = dyStrides;
+        const fltValues = backend.data.get(filter.dataId).values;
+        const [fltS0, fltS1, fltS2] = filterStrides;
+        const { batchSize, filterHeight, filterWidth, inChannels, inHeight, inWidth, outChannels, outHeight, outWidth, strideHeight, strideWidth } = convInfo;
+        const topPad = filterHeight - 1 - convInfo.padInfo.top;
+        const leftPad = filterWidth - 1 - convInfo.padInfo.left;
+        const chMul = outChannels / inChannels;
+        for (let b = 0; b < batchSize; ++b) {
+            for (let d1 = 0; d1 < inChannels; ++d1) {
+                for (let xR = 0; xR < inHeight; ++xR) {
+                    const xRCorner = xR - topPad;
+                    const xRMin = Math.max(0, Math.ceil(xRCorner / strideHeight));
+                    const yRMax = Math.min(outHeight, (filterHeight + xRCorner) / strideHeight);
+                    for (let xC = 0; xC < inWidth; ++xC) {
+                        const xCCorner = xC - leftPad;
+                        const xCMin = Math.max(0, Math.ceil(xCCorner / strideWidth));
+                        const yCMax = Math.min(outWidth, (filterWidth + xCCorner) / strideWidth);
+                        let dotProd = 0;
+                        for (let yR = xRMin; yR < yRMax; ++yR) {
+                            const wR = yR * strideHeight - xRCorner;
+                            for (let yC = xCMin; yC < yCMax; ++yC) {
+                                const wC = yC * strideWidth - xCCorner;
+                                const dyOffset = dyS0 * b + dyS1 * yR + dyS2 * yC;
+                                const fltOffset = fltS0 * (filterHeight - 1 - wR) +
+                                    fltS1 * (filterWidth - 1 - wC) + fltS2 * d1;
+                                for (let dm = 0; dm < chMul; ++dm) {
+                                    const d2 = d1 * chMul + dm;
+                                    const pixel = dyValues[dyOffset + d2];
+                                    const weight = fltValues[fltOffset + dm];
+                                    dotProd += pixel * weight;
+                                }
+                            }
+                        }
+                        dxValues[dxS0 * b + dxS1 * xR + dxS2 * xC + d1] = dotProd;
+                    }
+                }
+            }
+        }
+        return backend.makeTensorInfo(dx.shape, dx.dtype, dx.values);
+    }
+    const depthwiseConv2dNativeBackpropInputConfig = {
+        kernelName: DepthwiseConv2dNativeBackpropInput,
+        backendName: 'cpu',
+        kernelFunc: depthwiseConv2dNativeBackpropInput$1
     };
 
     /**
@@ -54525,36 +55525,13 @@
      * limitations under the License.
      * =============================================================================
      */
-    const eluKernelFunc = unaryKernelFunc(Elu, (xi) => xi >= 0 ? xi : (Math.exp(xi) - 1));
-    const eluConfig = {
-        kernelName: Elu,
-        backendName: 'cpu',
-        kernelFunc: eluKernelFunc,
-    };
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the License);
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an AS IS BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
     const p = ERF_P;
     const a1 = ERF_A1;
     const a2 = ERF_A2;
     const a3 = ERF_A3;
     const a4 = ERF_A4;
     const a5 = ERF_A5;
-    const erfKernelFunc = unaryKernelFunc(Erf, (xi) => {
+    const erf$1 = unaryKernelFunc(Erf, (xi) => {
         const sign = Math.sign(xi);
         const v = Math.abs(xi);
         const t = 1.0 / (1.0 + p * v);
@@ -54566,7 +55543,7 @@
     const erfConfig = {
         kernelName: Erf,
         backendName: 'cpu',
-        kernelFunc: erfKernelFunc,
+        kernelFunc: erf$1,
     };
 
     /**
@@ -54841,6 +55818,44 @@
      * limitations under the License.
      * =============================================================================
      */
+    function fill$1(args) {
+        const { backend, attrs } = args;
+        const { shape, value, dtype } = attrs;
+        const $dtype = dtype || inferDtype(value);
+        const values = getArrayFromDType($dtype, sizeFromShape(shape));
+        fillValues(values, value, $dtype);
+        return backend.makeTensorInfo(shape, $dtype, values);
+    }
+    const fillConfig = {
+        kernelName: Fill,
+        backendName: 'cpu',
+        kernelFunc: fill$1
+    };
+    function fillValues(values, value, dtype) {
+        if (dtype === 'string') {
+            values.fill(value);
+        }
+        else {
+            values.fill(value);
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
     const flipLeftRightConfig = {
         kernelName: FlipLeftRight,
         backendName: 'cpu',
@@ -54877,6 +55892,94 @@
             const dataId = cpuBackend.write(output, image.shape, image.dtype);
             return { dataId, shape: image.shape, dtype: image.dtype };
         }
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function fusedConv2D(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, filter, bias, preluActivationWeights } = inputs;
+        const { strides, pad, dataFormat, dilations, dimRoundingMode, activation } = attrs;
+        let result = conv2D({
+            inputs: { x, filter },
+            backend,
+            attrs: { strides, pad, dataFormat, dilations, dimRoundingMode }
+        });
+        if (bias) {
+            const resultOld = result;
+            result = add$2({ inputs: { a: result, b: bias }, backend });
+            backend.disposeIntermediateTensorInfo(resultOld);
+        }
+        if (activation) {
+            const resultOld = result;
+            result =
+                applyActivation$1(backend, result, activation, preluActivationWeights);
+            backend.disposeIntermediateTensorInfo(resultOld);
+        }
+        return result;
+    }
+    const fusedConv2DConfig = {
+        kernelName: FusedConv2D,
+        backendName: 'cpu',
+        kernelFunc: fusedConv2D
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function fusedDepthwiseConv2D(args) {
+        const { inputs, backend, attrs } = args;
+        const { x, filter, bias, preluActivationWeights } = inputs;
+        const { strides, pad, dataFormat, dilations, dimRoundingMode, activation } = attrs;
+        let result = depthwiseConv2dNative({
+            inputs: { x, filter },
+            backend,
+            attrs: { strides, pad, dataFormat, dilations, dimRoundingMode }
+        });
+        if (bias) {
+            const oldResult = result;
+            result = add$2({ inputs: { a: result, b: bias }, backend });
+            backend.disposeIntermediateTensorInfo(oldResult);
+        }
+        if (activation) {
+            const oldResult = result;
+            result =
+                applyActivation$1(backend, result, activation, preluActivationWeights);
+            backend.disposeIntermediateTensorInfo(oldResult);
+        }
+        return result;
+    }
+    const fusedDepthwiseConv2DConfig = {
+        kernelName: FusedDepthwiseConv2D,
+        backendName: 'cpu',
+        kernelFunc: fusedDepthwiseConv2D
     };
 
     /**
@@ -54935,11 +56038,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const isFiniteKernelFunc = unaryKernelFunc(IsFinite, (xi) => Number.isFinite(xi) ? 1 : 0, 'bool');
+    const isFinite$2 = unaryKernelFunc(IsFinite, (xi) => Number.isFinite(xi) ? 1 : 0, 'bool');
     const isFiniteConfig = {
         kernelName: IsFinite,
         backendName: 'cpu',
-        kernelFunc: isFiniteKernelFunc,
+        kernelFunc: isFinite$2,
     };
 
     /**
@@ -54958,11 +56061,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const isInfKernelFunc = unaryKernelFunc(IsInf, (xi) => Math.abs(xi) === Infinity ? 1 : 0, 'bool');
+    const isInf$1 = unaryKernelFunc(IsInf, (xi) => Math.abs(xi) === Infinity ? 1 : 0, 'bool');
     const isInfConfig = {
         kernelName: IsInf,
         backendName: 'cpu',
-        kernelFunc: isInfKernelFunc,
+        kernelFunc: isInf$1,
     };
 
     /**
@@ -54981,11 +56084,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const isNaNKernelFunc = unaryKernelFunc(IsNan, (xi) => Number.isNaN(xi) ? 1 : 0, 'bool');
+    const isNaN$2 = unaryKernelFunc(IsNan, (xi) => Number.isNaN(xi) ? 1 : 0, 'bool');
     const isNaNConfig = {
         kernelName: IsNan,
         backendName: 'cpu',
-        kernelFunc: isNaNKernelFunc,
+        kernelFunc: isNaN$2,
     };
 
     /**
@@ -55004,11 +56107,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const log1pKernelFunc = unaryKernelFunc(Log1p, (xi) => Math.log1p(xi));
+    const log1p$1 = unaryKernelFunc(Log1p, (xi) => Math.log1p(xi));
     const log1pConfig = {
         kernelName: Log1p,
         backendName: 'cpu',
-        kernelFunc: log1pKernelFunc,
+        kernelFunc: log1p$1,
     };
 
     /**
@@ -55027,11 +56130,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const logicalNotKernelFunc = unaryKernelFunc(LogicalNot, (xi) => xi ? 0 : 1, 'bool');
+    const logicalNot$1 = unaryKernelFunc(LogicalNot, (xi) => xi ? 0 : 1, 'bool');
     const logicalNotConfig = {
         kernelName: LogicalNot,
         backendName: 'cpu',
-        kernelFunc: logicalNotKernelFunc,
+        kernelFunc: logicalNot$1,
     };
 
     /**
@@ -55287,6 +56390,61 @@
      * limitations under the License.
      * =============================================================================
      */
+    function mirrorPad$1(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { paddings, mode } = attrs;
+        assertNotComplex(x, 'mirrorPad');
+        const outShape = paddings.map((p, i) => p[0] /* beforePad */ + x.shape[i] + p[1] /* afterPad */);
+        const start = paddings.map(p => p[0]);
+        const end = paddings.map((p, i) => p[0] + x.shape[i]);
+        const offset = mode === 'reflect' ? 0 : 1;
+        const xVals = backend.data.get(x.dataId).values;
+        const xRank = x.shape.length;
+        const xStrides = computeStrides(x.shape);
+        const resultSize = sizeFromShape(outShape);
+        const resultRank = outShape.length;
+        const resultStrides = computeStrides(outShape);
+        const resVals = getTypedArrayFromDType(x.dtype, resultSize);
+        for (let i = 0; i < resultSize; i++) {
+            let coords = indexToLoc(i, resultRank, resultStrides);
+            for (let i = 0; i < resultRank; i++) {
+                if (coords[i] < start[i]) {
+                    coords[i] = start[i] * 2 - coords[i] - offset;
+                }
+                else if (coords[i] >= end[i]) {
+                    coords[i] = (end[i] - 1) * 2 - coords[i] + offset;
+                }
+            }
+            coords = coords.map((c, i) => c - start[i]);
+            const inIndex = locToIndex(coords, xRank, xStrides);
+            resVals[i] = xVals[inIndex];
+        }
+        const outId = backend.write(resVals, outShape, x.dtype);
+        return { dataId: outId, shape: outShape, dtype: x.dtype };
+    }
+    const mirrorPadConfig = {
+        kernelName: MirrorPad,
+        backendName: 'cpu',
+        kernelFunc: mirrorPad$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
     const nonMaxSuppressionV4Impl$1 = nonMaxSuppressionV4Impl;
     const nonMaxSuppressionV4Config = {
         kernelName: NonMaxSuppressionV4,
@@ -55355,30 +56513,6 @@
      * limitations under the License.
      * =============================================================================
      */
-    const notEqualImpl = createSimpleBinaryKernelImpl(((a, b) => (a !== b) ? 1 : 0));
-    const notEqual$1 = binaryKernelFunc(NotEqual, notEqualImpl, null /* complexOp */, 'bool');
-    const notEqualConfig = {
-        kernelName: NotEqual,
-        backendName: 'cpu',
-        kernelFunc: notEqual$1
-    };
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
     function padV2(args) {
         const { inputs, backend, attrs } = args;
         const { x } = inputs;
@@ -55428,11 +56562,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const reciprocalKernelFunc = unaryKernelFunc(Reciprocal, (xi) => 1 / xi);
+    const reciprocal$1 = unaryKernelFunc(Reciprocal, (xi) => 1 / xi);
     const reciprocalConfig = {
         kernelName: Reciprocal,
         backendName: 'cpu',
-        kernelFunc: reciprocalKernelFunc,
+        kernelFunc: reciprocal$1,
     };
 
     /**
@@ -55525,7 +56659,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const roundKernelFunc = unaryKernelFunc(Round, (xi) => {
+    const round$1 = unaryKernelFunc(Round, (xi) => {
         // The algorithm is based on banker's rounding.
         const base = Math.floor(xi);
         if (xi - base < 0.5) {
@@ -55546,7 +56680,7 @@
     const roundConfig = {
         kernelName: Round,
         backendName: 'cpu',
-        kernelFunc: roundKernelFunc,
+        kernelFunc: round$1,
     };
 
     /**
@@ -55567,7 +56701,7 @@
      */
     const scaleAlpha = SELU_SCALEALPHA;
     const scale = SELU_SCALE;
-    const seluKernelFunc = unaryKernelFunc(Selu, (xi) => {
+    const selu$1 = unaryKernelFunc(Selu, (xi) => {
         if (xi >= 0) {
             return scale * xi;
         }
@@ -55578,7 +56712,7 @@
     const seluConfig = {
         kernelName: Selu,
         backendName: 'cpu',
-        kernelFunc: seluKernelFunc,
+        kernelFunc: selu$1,
     };
 
     /**
@@ -55597,11 +56731,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const sigmoidKernelFunc = unaryKernelFunc(Sigmoid, (xi) => 1 / (1 + Math.exp(-xi)));
+    const sigmoid$1 = unaryKernelFunc(Sigmoid, (xi) => 1 / (1 + Math.exp(-xi)));
     const sigmoidConfig = {
         kernelName: Sigmoid,
         backendName: 'cpu',
-        kernelFunc: sigmoidKernelFunc,
+        kernelFunc: sigmoid$1,
     };
 
     /**
@@ -55620,7 +56754,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const signKernelFunc = unaryKernelFunc(Sign, (xi) => {
+    const sign$1 = unaryKernelFunc(Sign, (xi) => {
         if (xi < 0) {
             return -1;
         }
@@ -55634,7 +56768,7 @@
     const signConfig = {
         kernelName: Sign,
         backendName: 'cpu',
-        kernelFunc: signKernelFunc,
+        kernelFunc: sign$1,
     };
 
     /**
@@ -55653,11 +56787,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const sinKernelFunc = unaryKernelFunc(Sin, (xi) => Math.sin(xi));
+    const sin$1 = unaryKernelFunc(Sin, (xi) => Math.sin(xi));
     const sinConfig = {
         kernelName: Sin,
         backendName: 'cpu',
-        kernelFunc: sinKernelFunc,
+        kernelFunc: sin$1,
     };
 
     /**
@@ -55676,11 +56810,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const sinhKernelFunc = unaryKernelFunc(Sinh, (xi) => Math.sinh(xi));
+    const sinh$1 = unaryKernelFunc(Sinh, (xi) => Math.sinh(xi));
     const sinhConfig = {
         kernelName: Sinh,
         backendName: 'cpu',
-        kernelFunc: sinhKernelFunc,
+        kernelFunc: sinh$1,
     };
 
     /**
@@ -55705,7 +56839,7 @@
     // https://math.byu.edu/~schow/work/IEEEFloatingPoint.htm
     const epsilon$1 = 1.1920928955078125e-7;
     const threshold = Math.log(epsilon$1) + 2.0;
-    const softplusKernelFunc = unaryKernelFunc(Softplus, (xi) => {
+    const softplus$1 = unaryKernelFunc(Softplus, (xi) => {
         // Value above which exp(x) may overflow, but softplus(x) == x
         // is within machine epsilon.
         const tooLarge = xi > -threshold;
@@ -55728,7 +56862,7 @@
     const softplusConfig = {
         kernelName: Softplus,
         backendName: 'cpu',
-        kernelFunc: softplusKernelFunc,
+        kernelFunc: softplus$1,
     };
 
     /**
@@ -55839,11 +56973,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const sqrtKernelFunc = unaryKernelFunc(Sqrt, (xi) => Math.sqrt(xi));
+    const sqrt$1 = unaryKernelFunc(Sqrt, (xi) => Math.sqrt(xi));
     const sqrtConfig = {
         kernelName: Sqrt,
         backendName: 'cpu',
-        kernelFunc: sqrtKernelFunc,
+        kernelFunc: sqrt$1,
     };
 
     /**
@@ -55883,33 +57017,6 @@
     /**
      * @license
      * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    const squaredDifferenceImpl = createSimpleBinaryKernelImpl(((a, b) => {
-        const diff = a - b;
-        return diff * diff;
-    }));
-    const squaredDifference$1 = binaryKernelFunc(SquaredDifference, squaredDifferenceImpl);
-    const squaredDifferenceConfig = {
-        kernelName: SquaredDifference,
-        backendName: 'cpu',
-        kernelFunc: squaredDifference$1
-    };
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the License);
      * you may not use this file except in compliance with the License.
      * You may obtain a copy of the License at
@@ -55923,7 +57030,7 @@
      * limitations under the License.
      * =============================================================================
      */
-    const stepKernelFunc = unaryKernelFunc(Step, (xi, attrs) => {
+    const step$1 = unaryKernelFunc(Step, (xi, attrs) => {
         const stepAttrs = attrs;
         if (isNaN(xi)) {
             return NaN;
@@ -55935,7 +57042,7 @@
     const stepConfig = {
         kernelName: Step,
         backendName: 'cpu',
-        kernelFunc: stepKernelFunc,
+        kernelFunc: step$1,
     };
 
     /**
@@ -55954,11 +57061,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const tanKernelFunc = unaryKernelFunc(Tan, (xi) => Math.tan(xi));
+    const tan$1 = unaryKernelFunc(Tan, (xi) => Math.tan(xi));
     const tanConfig = {
         kernelName: Tan,
         backendName: 'cpu',
-        kernelFunc: tanKernelFunc,
+        kernelFunc: tan$1,
     };
 
     /**
@@ -55977,11 +57084,11 @@
      * limitations under the License.
      * =============================================================================
      */
-    const tanhKernelFunc = unaryKernelFunc(Tanh, (xi) => Math.tanh(xi));
+    const tanh$1 = unaryKernelFunc(Tanh, (xi) => Math.tanh(xi));
     const tanhConfig = {
         kernelName: Tanh,
         backendName: 'cpu',
-        kernelFunc: tanhKernelFunc,
+        kernelFunc: tanh$1,
     };
 
     /**
@@ -56036,6 +57143,7 @@
      */
     // List all kernel configs here
     const kernelConfigs = [
+        _fusedMatMulConfig,
         absConfig,
         acosConfig,
         acoshConfig,
@@ -56046,14 +57154,24 @@
         atanhConfig,
         avgPoolConfig,
         avgPoolBackpropConfig,
+        batchMatMulConfig,
         batchNormConfig,
         castConfig,
         ceilConfig,
         clipConfig,
         complexConfig,
         concatConfig,
+        conv2DBackpropFilterConfig,
+        conv2DBackpropInputConfig,
+        conv2DConfig,
+        conv3DBackpropFilterV2Config,
+        conv3DBackpropInputV2Config,
+        conv3DConfig,
         cosConfig,
         coshConfig,
+        depthwiseConv2dNativeConfig,
+        depthwiseConv2dNativeBackpropFilterConfig,
+        depthwiseConv2dNativeBackpropInputConfig,
         dilation2dConfig,
         dilation2dBackpropInputConfig,
         dilation2dBackpropFilterConfig,
@@ -56063,8 +57181,11 @@
         expConfig,
         expm1Config,
         fftConfig,
+        fillConfig,
         flipLeftRightConfig,
         floorConfig,
+        fusedConv2DConfig,
+        fusedDepthwiseConv2DConfig,
         identityConfig,
         ifftConfig,
         imagConfig,
@@ -56078,13 +57199,17 @@
         maxPoolBackpropConfig,
         maxPoolWithArgmaxConfig,
         maxConfig,
+        mirrorPadConfig,
         multiplyConfig,
         nonMaxSuppressionV4Config,
         nonMaxSuppressionV5Config,
         notEqualConfig,
         padV2Config,
+        preluConfig,
         realConfig,
         reciprocalConfig,
+        reluConfig,
+        relu6Config,
         reshapeConfig,
         rotateWithOffsetConfig,
         roundConfig,
@@ -58891,51 +60016,6 @@ vec2 packedUVfrom3D(int texNumR, int texNumC,
 
     /**
      * @license
-     * Copyright 2018 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    // (Ar + Ai)(Br + Bi) =
-    // ArBr + ArBi + AiBr + AiBi = ArBr - AB + ArBi + AiBr
-    // Yr = ArBr - AB
-    // Yi = ArBi + AiBr
-    const COMPLEX_MULTIPLY = {
-        REAL: 'return areal * breal - aimag * bimag;',
-        IMAG: 'return areal * bimag + aimag * breal;'
-    };
-    class BinaryOpComplexProgram {
-        constructor(op, aShape, bShape) {
-            this.variableNames = ['AReal', 'AImag', 'BReal', 'BImag'];
-            this.outputShape = assertAndGetBroadcastShape(aShape, bShape);
-            this.userCode = `
-      float binaryOpComplex(
-          float areal, float aimag, float breal, float bimag) {
-        ${op}
-      }
-
-      void main() {
-        float areal = getARealAtOutCoords();
-        float aimag = getAImagAtOutCoords();
-        float breal = getBRealAtOutCoords();
-        float bimag = getBImagAtOutCoords();
-        setOutput(binaryOpComplex(areal, aimag, breal, bimag));
-      }
-    `;
-        }
-    }
-
-    /**
-     * @license
      * Copyright 2017 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -58954,9 +60034,6 @@ vec2 packedUVfrom3D(int texNumR, int texNumC,
   if (isnan(a)) return a;
   if (isnan(b)) return b;
 `;
-    const ADD = 'return a + b;';
-    const SUB = 'return a - b;';
-    const MUL = 'return a * b;';
     // We use native integer division to deal with floating point imprecision. Since
     // we implement floor division and glsl implements truncated division, we
     // correct for this by subtracting 1 from result when the result is negative and
@@ -58983,7 +60060,6 @@ return (round(mod(b, 2.0)) != 1) ?
     pow(abs(a), b) : sign(a) * pow(abs(a), b);
 `;
     const EQUAL = `return float(a == b);`;
-    const NOT_EQUAL = `return float(a != b);`;
     const LESS = `return float(a < b);`;
     const LESS_EQUAL = `return float(a <= b);`;
     const GREATER = `return float(a > b);`;
@@ -59090,9 +60166,6 @@ return (round(mod(b, 2.0)) != 1) ?
 `;
     const EQUAL$1 = `
   return vec4(equal(a, b));
-`;
-    const NOT_EQUAL$1 = `
-  return vec4(notEqual(a, b));
 `;
     const LESS$1 = `
   return vec4(lessThan(a, b));
@@ -59331,166 +60404,6 @@ return (round(mod(b, 2.0)) != 1) ?
       }
     `;
         }
-    }
-
-    /**
-     * @license
-     * Copyright 2017 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    class ConcatProgram {
-        // Concats 2d tensors along axis=1. See comments in MathBackendWebGL.concat().
-        constructor(shapes) {
-            this.outputShape = [];
-            this.outputShape = computeOutShape$1(shapes, 1 /* axis */);
-            this.variableNames = shapes.map((_, i) => `T${i}`);
-            const offsets = new Array(shapes.length - 1);
-            offsets[0] = shapes[0][1];
-            for (let i = 1; i < offsets.length; i++) {
-                offsets[i] = offsets[i - 1] + shapes[i][1];
-            }
-            const snippets = [`if (yC < ${offsets[0]}) setOutput(getT0(yR, yC));`];
-            for (let i = 1; i < offsets.length; i++) {
-                const shift = offsets[i - 1];
-                snippets.push(`else if (yC < ${offsets[i]}) ` +
-                    `setOutput(getT${i}(yR, yC-${shift}));`);
-            }
-            const lastIndex = offsets.length;
-            const lastShift = offsets[offsets.length - 1];
-            snippets.push(`else setOutput(getT${lastIndex}(yR, yC-${lastShift}));`);
-            this.userCode = `
-      void main() {
-        ivec2 coords = getOutputCoords();
-        int yR = coords.x;
-        int yC = coords.y;
-
-        ${snippets.join('\n        ')}
-      }
-    `;
-        }
-    }
-
-    /**
-     * @license
-     * Copyright 2019 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    class ConcatPackedProgram {
-        constructor(shapes, axis) {
-            this.packedInputs = true;
-            this.packedOutput = true;
-            this.outputShape = [];
-            this.outputShape = computeOutShape$1(shapes, axis);
-            const shape = this.outputShape;
-            const rank = shape.length;
-            const dtype = getCoordsDataType(rank);
-            const coords = getChannels('coords', rank);
-            const channels = ['x', 'y', 'z', 'w', 'u', 'v'].slice(0, rank);
-            this.variableNames = shapes.map((_, i) => `T${i}`);
-            const offsets = new Array(shapes.length - 1);
-            offsets[0] = shapes[0][axis];
-            for (let i = 1; i < offsets.length; i++) {
-                offsets[i] = offsets[i - 1] + shapes[i][axis];
-            }
-            const channel = channels[axis];
-            const lastChannels = channels.slice(-2);
-            const allChannels = channels.join();
-            let getValueSnippet = `if (${channel} < ${offsets[0]}) {
-        return getChannel(
-            getT0(${allChannels}), vec2(${lastChannels.join()}));
-        }`;
-            for (let i = 1; i < offsets.length; i++) {
-                const shift = offsets[i - 1];
-                // Note: the >= comparison below may seem unnecessary given the check
-                // above but is needed to workaround branch execution issues on some
-                // devices. It makes all the conditions exclusive without relying on
-                // execution order.
-                getValueSnippet += `
-        if (${channel} < ${offsets[i]}  && ${channel} >= ${offsets[i - 1]}) {
-          return getChannel(
-            getT${i}(${shiftedChannels(channels, channel, shift)}),
-            vec2(${shiftedChannels(lastChannels, channel, shift)}));
-        }`;
-            }
-            const lastIndex = offsets.length;
-            const shift = offsets[offsets.length - 1];
-            getValueSnippet += `
-        return getChannel(
-          getT${lastIndex}(${shiftedChannels(channels, channel, shift)}),
-          vec2(${shiftedChannels(lastChannels, channel, shift)}));`;
-            this.userCode = `
-      float getValue(${channels.map(x => 'int ' + x)}) {
-        ${getValueSnippet}
-      }
-
-      void main() {
-        ${dtype} coords = getOutputCoords();
-        vec4 result = vec4(getValue(${coords}), 0., 0., 0.);
-
-        ${coords[rank - 1]} = ${coords[rank - 1]} + 1;
-        if (${coords[rank - 1]} < ${shape[rank - 1]}) {
-          result.g = getValue(${coords});
-        }
-
-        ${coords[rank - 2]} = ${coords[rank - 2]} + 1;
-        if (${coords[rank - 2]} < ${shape[rank - 2]}) {
-          result.a = getValue(${coords});
-        }
-
-        ${coords[rank - 1]} = ${coords[rank - 1]} - 1;
-        if (${coords[rank - 2]} < ${shape[rank - 2]} &&
-            ${coords[rank - 1]} < ${shape[rank - 1]}) {
-          result.b = getValue(${coords});
-        }
-        setOutput(result);
-      }
-    `;
-        }
-    }
-    /**
-     * Return an expression for coordinates into a vector where a given channel
-     * will be offset by [shift].
-     *
-     * @param channels the channels to consider
-     * @param channel the channel we want shifted
-     * @param shift  the amount to subtract from the channel.
-     *
-     * @returns a string of the form 'x, y-[shift], z' where any one channel can
-     * have the shift applied.
-     */
-    function shiftedChannels(channels, channel, shift) {
-        const channelIdx = channels.indexOf(channel);
-        const res = channels.map((c, idx) => {
-            if (idx === channelIdx) {
-                return `${c} - ${shift}`;
-            }
-            else {
-                return c;
-            }
-        });
-        return res.join();
     }
 
     /**
@@ -61227,70 +62140,6 @@ return (round(mod(b, 2.0)) != 1) ?
 
     /**
      * @license
-     * Copyright 2018 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    const COMPLEX_FFT = {
-        REAL: 'return real * expR - imag * expI;',
-        IMAG: 'return real * expI + imag * expR;'
-    };
-    class FFTProgram {
-        constructor(op, inputShape, inverse) {
-            this.variableNames = ['real', 'imag'];
-            const innerDim = inputShape[1];
-            this.outputShape = inputShape;
-            const exponentMultiplierSnippet = inverse ? `2.0 * ${Math.PI}` : `-2.0 * ${Math.PI}`;
-            const resultDenominator = inverse ? `${innerDim}.0` : '1.0';
-            this.userCode = `
-      const float exponentMultiplier = ${exponentMultiplierSnippet};
-
-      float unaryOpComplex(float real, float expR, float imag, float expI) {
-        ${op}
-      }
-
-      float mulMatDFT(int batch, int index) {
-        float indexRatio = float(index) / float(${innerDim});
-        float exponentMultiplierTimesIndexRatio =
-            exponentMultiplier * indexRatio;
-
-        float result = 0.0;
-
-        for (int i = 0; i < ${innerDim}; i++) {
-          // x = (-2|2 * PI / N) * index * i;
-          float x = exponentMultiplierTimesIndexRatio * float(i);
-          float expR = cos(x);
-          float expI = sin(x);
-          float real = getReal(batch, i);
-          float imag = getImag(batch, i);
-
-          result +=
-              unaryOpComplex(real, expR, imag, expI) / ${resultDenominator};
-        }
-
-        return result;
-      }
-
-      void main() {
-        ivec2 coords = getOutputCoords();
-        setOutput(mulMatDFT(coords[0], coords[1]));
-      }
-    `;
-        }
-    }
-
-    /**
-     * @license
      * Copyright 2019 Google LLC. All Rights Reserved.
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.
@@ -62712,7 +63561,7 @@ return (round(mod(b, 2.0)) != 1) ?
      * =============================================================================
      */
     class MatMulPackedProgram {
-        constructor(aShape, outputShape, transposeA = false, transposeB = false, addBias = false, activation = null, hasPreluActivation = false) {
+        constructor(aShape, bShape, outputShape, transposeA = false, transposeB = false, addBias = false, activation = null, hasPreluActivation = false) {
             this.variableNames = ['matrixA', 'matrixB'];
             this.packedInputs = true;
             this.packedOutput = true;
@@ -62745,6 +63594,14 @@ return (round(mod(b, 2.0)) != 1) ?
             if (hasPreluActivation) {
                 this.variableNames.push('preluActivationWeights');
             }
+            let batchASnippet = 'rc.x';
+            let batchBSnippet = 'rc.x';
+            if (aShape[0] < bShape[0]) {
+                batchASnippet = `int(min(float(rc.x), ${aShape[0] - 1}.))`;
+            }
+            else if (bShape[0] < aShape[0]) {
+                batchBSnippet = `int(min(float(rc.x), ${bShape[0] - 1}.))`;
+            }
             this.userCode = `
       ${activationSnippet}
 
@@ -62753,8 +63610,10 @@ return (round(mod(b, 2.0)) != 1) ?
       vec4 dot2x2ARowBCol(ivec3 rc) {
         vec4 result = vec4(0);
         for (int i = 0; i < ${sharedDimensionPacked}; i++) {
-          vec4 a = getMatrixA(rc.x, ${aSample});
-          vec4 b = getMatrixB(rc.x, ${bSample});
+          int batchA = ${batchASnippet};
+          int batchB = ${batchBSnippet};
+          vec4 a = getMatrixA(batchA, ${aSample});
+          vec4 b = getMatrixB(batchB, ${bSample});
 
           // These swizzled products need to be separately added.
           // See: https://github.com/tensorflow/tfjs/issues/1735
@@ -65306,7 +66165,6 @@ return (round(mod(b, 2.0)) != 1) ?
 `;
     const RECIPROCAL = `return 1.0 / x;`;
     const LOGICAL_NOT = `return float(!(x >= 1.0));`;
-    const TO_INT = `return float(int(x));`;
     const CLONE = 'return x;';
 
     /**
@@ -65566,7 +66424,14 @@ return (round(mod(b, 2.0)) != 1) ?
                     `Please use tf.complex(real, imag).`);
             }
             const dataId = {};
-            this.texData.set(dataId, { shape, dtype, values, usage: TextureUsage.UPLOAD, refCount: 1 });
+            this.texData.set(dataId, {
+                shape,
+                dtype,
+                values,
+                usage: TextureUsage.UPLOAD,
+                refCount: 1,
+                complexParentRefCount: 0
+            });
             return dataId;
         }
         /** Increase refCount of a `TextureData`. */
@@ -65589,7 +66454,14 @@ return (round(mod(b, 2.0)) != 1) ?
                 throw new Error(`Cannot write to a complex64 dtype. ` +
                     `Please use tf.complex(real, imag).`);
             }
-            this.texData.set(dataId, { shape, dtype, values, usage: TextureUsage.UPLOAD, refCount: 1 });
+            this.texData.set(dataId, {
+                shape,
+                dtype,
+                values,
+                usage: TextureUsage.UPLOAD,
+                refCount: 1,
+                complexParentRefCount: 0
+            });
         }
         disposeIntermediateTensorInfo(tensorInfo) {
             const dataId = tensorInfo.dataId;
@@ -65603,7 +66475,7 @@ return (round(mod(b, 2.0)) != 1) ?
         }
         readSync(dataId) {
             const texData = this.texData.get(dataId);
-            const { values, dtype, complexTensors, slice, shape, isPacked } = texData;
+            const { values, dtype, complexTensorInfos, slice, shape, isPacked } = texData;
             // The presence of `slice` indicates this tensor is a shallow slice of a
             // different tensor, and is using that original tensor's texture. Run
             // `clone` in order to copy that texture and read from it.
@@ -65633,8 +66505,8 @@ return (round(mod(b, 2.0)) != 1) ?
             }
             let result;
             if (dtype === 'complex64') {
-                const realValues = complexTensors.real.dataSync();
-                const imagValues = complexTensors.imag.dataSync();
+                const realValues = this.readSync(complexTensorInfos.real.dataId);
+                const imagValues = this.readSync(complexTensorInfos.imag.dataId);
                 result = mergeRealAndImagArrays(realValues, imagValues);
             }
             else {
@@ -65651,7 +66523,7 @@ return (round(mod(b, 2.0)) != 1) ?
                 return new Promise(resolve => subscribers.push(resolve));
             }
             const texData = this.texData.get(dataId);
-            const { values, shape, slice, dtype, complexTensors, isPacked } = texData;
+            const { values, shape, slice, dtype, complexTensorInfos, isPacked } = texData;
             // The presence of `slice` indicates this tensor is a shallow slice of a
             // different tensor, and is using that original tensor's texture. Run
             // `clone` in order to copy that texture and read from it.
@@ -65692,7 +66564,10 @@ return (round(mod(b, 2.0)) != 1) ?
             // Download the values from the GPU.
             let vals;
             if (dtype === 'complex64') {
-                const ps = await Promise.all([complexTensors.real.data(), complexTensors.imag.data()]);
+                const ps = await Promise.all([
+                    this.read(complexTensorInfos.real.dataId),
+                    this.read(complexTensorInfos.imag.dataId)
+                ]);
                 const realValues = ps[0];
                 const imagValues = ps[1];
                 vals = mergeRealAndImagArrays(realValues, imagValues);
@@ -65846,11 +66721,21 @@ return (round(mod(b, 2.0)) != 1) ?
             if (!this.texData.has(dataId)) {
                 return;
             }
+            // Trying to dispose a textureData that has a 'kept' refCount, e.g. trying
+            // to dispose a tensor whose data bucket is shared with a complex tensor. In
+            // this case we are removing a reference to the textureData, but we
+            // shouldn't actually dispose the texture.
+            if (this.texData.get(dataId).complexParentRefCount > 0) {
+                this.texData.get(dataId).refCount--;
+                return;
+            }
             this.releaseGPUData(dataId);
-            const { complexTensors } = this.texData.get(dataId);
-            if (complexTensors != null) {
-                complexTensors.real.dispose();
-                complexTensors.imag.dispose();
+            const { complexTensorInfos } = this.texData.get(dataId);
+            if (complexTensorInfos != null) {
+                this.texData.get(complexTensorInfos.real.dataId).complexParentRefCount--;
+                this.disposeIntermediateTensorInfo(complexTensorInfos.real);
+                this.texData.get(complexTensorInfos.imag.dataId).complexParentRefCount--;
+                this.disposeIntermediateTensorInfo(complexTensorInfos.imag);
             }
             this.texData.delete(dataId);
         }
@@ -65917,26 +66802,6 @@ return (round(mod(b, 2.0)) != 1) ?
         getGPGPUContext() {
             return this.gpgpu;
         }
-        complex(real, imag) {
-            const result = this.makeOutput(real.shape, 'complex64');
-            const resultData = this.texData.get(result.dataId);
-            // The backend owns the reference to the underlying real and imaginary
-            // clones. These will explicitly get disposed when the complex tensor is
-            // disposed.
-            resultData.complexTensors = {
-                real: engine().keep(real.clone()),
-                imag: engine().keep(imag.clone())
-            };
-            return result;
-        }
-        real(input) {
-            const resultData = this.texData.get(input.dataId);
-            return resultData.complexTensors.real.clone();
-        }
-        imag(input) {
-            const resultData = this.texData.get(input.dataId);
-            return resultData.complexTensors.imag.clone();
-        }
         slice(x, begin, size) {
             if (this.shouldExecuteOnCPU([x])) {
                 const outValues = sliceImplCPU(this.texData.get(x.dataId).values, begin, size, x.shape, x.dtype);
@@ -66000,38 +66865,6 @@ return (round(mod(b, 2.0)) != 1) ?
                 new ReverseProgram(x.shape, axis);
             return this.compileAndRun(program, [x]);
         }
-        concat(tensors, axis) {
-            if (tensors[0].dtype === 'complex64') {
-                const reals = tensors.map((t) => real(t));
-                const imags = tensors.map((t) => imag(t));
-                return complex(this.concat(reals, axis), this.concat(imags, axis));
-            }
-            if (tensors.length === 1) {
-                return tensors[0];
-            }
-            if (tensors.length > env().getNumber('WEBGL_MAX_TEXTURES_IN_SHADER')) {
-                const midIndex = Math.floor(tensors.length / 2);
-                const leftSide = this.concat(tensors.slice(0, midIndex), axis);
-                const rightSide = this.concat(tensors.slice(midIndex), axis);
-                return this.concat([leftSide, rightSide], axis);
-            }
-            if (env().getBool('WEBGL_PACK_ARRAY_OPERATIONS') && tensors[0].rank > 1) {
-                const program = new ConcatPackedProgram(tensors.map(t => t.shape), axis);
-                return this.compileAndRun(program, tensors);
-            }
-            // Any concat of n-dimensional tensors across any axis can be reduced to
-            // a concatenation of two-dimensional tensors across the axis 1 by first
-            // partitioning the axes of the original tensors into those less than the
-            // axis to be concatenated and the rest. Then reshape the tensors
-            // into a two-dimensional tensor by collapsing these two sets of axes and
-            // concatenate the resulting matrices across the axis 1, finally reshaping
-            // the result to have the proper shape.
-            const outShape = computeOutShape$1(tensors.map(t => t.shape), axis);
-            const tensors2D = tensors.map(t => t.as2D(-1, sizeFromShape(t.shape.slice(axis))));
-            const program = new ConcatProgram(tensors2D.map(t => t.shape));
-            const res = this.compileAndRun(program, tensors2D);
-            return res.reshape(outShape);
-        }
         neg(x) {
             const cpuRes = this.tryRunOnCpuOrThrow([x], () => this.cpuBackend.neg(x));
             if (cpuRes) {
@@ -66047,7 +66880,7 @@ return (round(mod(b, 2.0)) != 1) ?
             const outerShapeA = transposeA ? a.shape[2] : a.shape[1];
             const outerShapeB = transposeB ? b.shape[1] : b.shape[2];
             const sharedDim = transposeA ? a.shape[1] : a.shape[2];
-            const [batch, ,] = a.shape;
+            const batch = Math.max(a.shape[0], b.shape[0]);
             // Since the matrices are vectors, it is faster to call mul().sum()
             // because sum() is O(sqrt(N)) due to divide-and-conquer.
             if ((outerShapeA === 1 || outerShapeB === 1) &&
@@ -66061,21 +66894,24 @@ return (round(mod(b, 2.0)) != 1) ?
                 const a3D = outerShapeB === 1 ? a : a.as3D(batch, sharedDim, 1);
                 const axis = outerShapeB === 1 ? 2 : 1;
                 const b3D = outerShapeB === 1 ? b.as3D(batch, 1, sharedDim) : b;
-                return this.multiply(a3D, b3D).sum(axis, true /* keepDims */);
+                // TODO(annxingyuan): Call multiply directly as part of batchMatMul
+                // modularization.
+                const product = mul(a3D, b3D);
+                return product.sum(axis, true /* keepDims */);
             }
             const dtype = upcastType(a.dtype, b.dtype);
-            const program = new MatMulPackedProgram(a.shape, [batch, outerShapeA, outerShapeB], transposeA, transposeB);
+            const program = new MatMulPackedProgram(a.shape, b.shape, [batch, outerShapeA, outerShapeB], transposeA, transposeB);
             return this.compileAndRun(program, [a, b], dtype);
         }
         fusedBatchMatMul({ a, b, transposeA, transposeB, bias, activation, preluActivationWeights }) {
             const outerShapeA = transposeA ? a.shape[2] : a.shape[1];
             const outerShapeB = transposeB ? b.shape[1] : b.shape[2];
-            const [batch, ,] = a.shape;
+            const batch = Math.max(a.shape[0], b.shape[0]);
             const dtype = upcastType(a.dtype, b.dtype);
             const hasBias = bias != null;
             const hasPreluActivationWeights = preluActivationWeights != null;
             const fusedActivation = activation ? mapActivationToShaderProgram(activation, true) : null;
-            const program = new MatMulPackedProgram(a.shape, [batch, outerShapeA, outerShapeB], transposeA, transposeB, hasBias, fusedActivation, hasPreluActivationWeights);
+            const program = new MatMulPackedProgram(a.shape, b.shape, [batch, outerShapeA, outerShapeB], transposeA, transposeB, hasBias, fusedActivation, hasPreluActivationWeights);
             const inputs = [a, b];
             if (bias) {
                 inputs.push(bias);
@@ -66084,38 +66920,6 @@ return (round(mod(b, 2.0)) != 1) ?
                 inputs.push(preluActivationWeights);
             }
             return this.compileAndRun(program, inputs, dtype);
-        }
-        multiply(a, b) {
-            if (a.dtype === 'complex64') {
-                const aData = this.texData.get(a.dataId);
-                const bData = this.texData.get(b.dataId);
-                const realProgram = new BinaryOpComplexProgram(COMPLEX_MULTIPLY.REAL, a.shape, b.shape);
-                const imagProgram = new BinaryOpComplexProgram(COMPLEX_MULTIPLY.IMAG, a.shape, b.shape);
-                const inputs = [
-                    this.makeComplexComponentTensorInfo(a, aData.complexTensors.real),
-                    this.makeComplexComponentTensorInfo(a, aData.complexTensors.imag),
-                    this.makeComplexComponentTensorInfo(b, bData.complexTensors.real),
-                    this.makeComplexComponentTensorInfo(b, bData.complexTensors.imag)
-                ];
-                const real = this.compileAndRun(realProgram, inputs);
-                const imag = this.compileAndRun(imagProgram, inputs);
-                const complex = this.complex(real, imag);
-                real.dispose();
-                imag.dispose();
-                return complex;
-            }
-            const dtype = upcastType(a.dtype, b.dtype);
-            if (this.shouldExecuteOnCPU([a, b])) {
-                const aData = this.texData.get(a.dataId);
-                const bData = this.texData.get(b.dataId);
-                const [outValues, outShape] = multiplyImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
-                return this.makeOutput(outShape, dtype, outValues);
-            }
-            if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
-                return this.packedBinaryOp(a, b, MUL, a.dtype);
-            }
-            const program = new BinaryOpProgram(MUL, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b], a.dtype);
         }
         localResponseNormalization4D(x, radius, bias, alpha, beta) {
             const program = env().getBool('WEBGL_PACK_NORMALIZATION') ?
@@ -66335,13 +67139,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new BinaryOpProgram(EQUAL, a.shape, b.shape);
             return this.compileAndRun(program, [a, b], 'bool');
         }
-        notEqual(a, b) {
-            if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
-                return this.packedBinaryOp(a, b, NOT_EQUAL$1, 'bool');
-            }
-            const program = new BinaryOpProgram(NOT_EQUAL, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b], 'bool');
-        }
         less(a, b) {
             const cpuRes = this.tryRunOnCpuOrThrow([a, b], () => this.cpuBackend.less(a, b));
             if (cpuRes) {
@@ -66466,23 +67263,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new BinaryOpProgram(op, a.shape, b.shape);
             return this.compileAndRun(program, [a, b], outputDtype);
         }
-        add(a, b) {
-            if (a.dtype === 'complex64' && b.dtype === 'complex64') {
-                return this.complexSeparableBinaryOp(a, b, ADD);
-            }
-            const dtype = upcastType(a.dtype, b.dtype);
-            if (this.shouldExecuteOnCPU([a, b])) {
-                const aData = this.texData.get(a.dataId);
-                const bData = this.texData.get(b.dataId);
-                const [outValues, outShape] = addImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
-                return this.makeOutput(outShape, dtype, outValues);
-            }
-            if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
-                return this.packedBinaryOp(a, b, ADD, dtype);
-            }
-            const program = new BinaryOpProgram(ADD, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b], dtype);
-        }
         packedUnaryOp(x, op, dtype) {
             const program = new UnaryOpPackedProgram(x.shape, op);
             return this.compileAndRun(program, [x], dtype);
@@ -66490,28 +67270,6 @@ return (round(mod(b, 2.0)) != 1) ?
         packedBinaryOp(a, b, op, dtype, checkOutOfBounds = false) {
             const program = new BinaryOpPackedProgram(op, a.shape, b.shape, checkOutOfBounds);
             return this.compileAndRun(program, [a, b], dtype);
-        }
-        /**
-         * Computes a complex binary operation that can be decomposed into a simple
-         * binary operation on both the real and imagary parts.
-         */
-        complexSeparableBinaryOp(a, b, op) {
-            const aData = this.texData.get(a.dataId);
-            const bData = this.texData.get(b.dataId);
-            const [real, imag] = [
-                [aData.complexTensors.real, bData.complexTensors.real],
-                [aData.complexTensors.imag, bData.complexTensors.imag]
-            ].map(complexParts => {
-                const [aPart, bPart] = complexParts;
-                const aHandle = this.makeComplexComponentTensorInfo(a, aPart);
-                const bHandle = this.makeComplexComponentTensorInfo(b, bPart);
-                const program = new BinaryOpProgram(op, a.shape, b.shape);
-                return this.compileAndRun(program, [aHandle, bHandle], upcastType(aPart.dtype, bPart.dtype));
-            });
-            const complex = this.complex(real, imag);
-            real.dispose();
-            imag.dispose();
-            return complex;
         }
         // Returns a TensorInfo with the complex shape and the dataId of the
         // underlying part. We need to do this because a reshaped complex tensor is
@@ -66542,23 +67300,6 @@ return (round(mod(b, 2.0)) != 1) ?
                 new AddNPackedProgram(tensors[0].shape, shapes) :
                 new AddNProgram(tensors[0].shape, shapes);
             return this.compileAndRun(program, tensors, dtype);
-        }
-        subtract(a, b) {
-            if (a.dtype === 'complex64' && b.dtype === 'complex64') {
-                return this.complexSeparableBinaryOp(a, b, SUB);
-            }
-            const dtype = upcastType(a.dtype, b.dtype);
-            if (this.shouldExecuteOnCPU([a, b])) {
-                const aData = this.texData.get(a.dataId);
-                const bData = this.texData.get(b.dataId);
-                const [outValues, outShape] = subImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
-                return this.makeOutput(outShape, dtype, outValues);
-            }
-            if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
-                return this.packedBinaryOp(a, b, SUB, a.dtype);
-            }
-            const program = new BinaryOpProgram(SUB, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b], dtype);
         }
         pow(a, b) {
             const usePackedOp = env().getBool('WEBGL_PACK_BINARY_OPERATIONS');
@@ -66638,7 +67379,9 @@ return (round(mod(b, 2.0)) != 1) ?
             // modularization.
             const maxLogit = max(logits, axes);
             const expandedShape = expandShapeToKeepDim(maxLogit.shape, axes);
-            const a = this.subtract(logits, maxLogit.reshape(expandedShape));
+            // TODO(annxingyuan): Call sub directly as part of softmax kernel
+            // modularization.
+            const a = sub(logits, maxLogit.reshape(expandedShape));
             const b = this.exp(a);
             const sumExp = this.sum(b, axes).reshape(expandedShape);
             // TODO(annxingyuan): Call divImpl rather than op as part of softmax kernel
@@ -66719,10 +67462,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new UnaryOpProgram(x.shape, SELU);
             return this.compileAndRun(program, [x]);
         }
-        int(x) {
-            const program = new UnaryOpProgram(x.shape, TO_INT);
-            return this.compileAndRun(program, [x], 'int32');
-        }
         clip(x, min, max) {
             let program;
             if (env().getBool('WEBGL_PACK_CLIP')) {
@@ -66750,8 +67489,8 @@ return (round(mod(b, 2.0)) != 1) ?
             const xData = this.texData.get(x.dataId);
             const program = new ComplexAbsProgram(x.shape);
             const inputs = [
-                this.makeComplexComponentTensorInfo(x, xData.complexTensors.real),
-                this.makeComplexComponentTensorInfo(x, xData.complexTensors.imag),
+                this.makeComplexComponentTensorInfo(x, xData.complexTensorInfos.real),
+                this.makeComplexComponentTensorInfo(x, xData.complexTensorInfos.imag),
             ];
             return this.compileAndRun(program, inputs);
         }
@@ -66911,7 +67650,7 @@ return (round(mod(b, 2.0)) != 1) ?
             const hasBias = bias != null;
             const hasPreluActivationWeights = preluActivationWeights != null;
             const fusedActivation = activation ? mapActivationToShaderProgram(activation, true) : null;
-            const matmulProgram = new MatMulPackedProgram(im2Col.shape, [1, numCols, convInfo.outChannels], transposeA, transposeB, hasBias, fusedActivation, hasPreluActivationWeights);
+            const matmulProgram = new MatMulPackedProgram(im2Col.shape, w2Row.shape, [1, numCols, convInfo.outChannels], transposeA, transposeB, hasBias, fusedActivation, hasPreluActivationWeights);
             const inputs = [im2Col, w2Row];
             if (bias) {
                 inputs.push(bias);
@@ -67028,9 +67767,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new Conv3DDerFilterProgram(convInfo);
             return this.compileAndRun(program, [x, dy]);
         }
-        cast(x, dtype) {
-            return castTensor(x, dtype, this);
-        }
         unstack(x, axis) {
             const num = x.shape[axis];
             const outShape = new Array(x.rank - 1);
@@ -67146,29 +67882,6 @@ return (round(mod(b, 2.0)) != 1) ?
             const program = new ScatterProgram(numUpdates, sliceRank, sparseIndices.rank, sparseValues.rank, strides, [outputSize, 1], sumDupeIndices);
             const res = this.compileAndRun(program, [sparseValues, sparseIndices, defaultValue]);
             return res.reshape(outputShape);
-        }
-        fft(x) {
-            const inverse = false;
-            return this.fftImpl(x, inverse);
-        }
-        ifft(x) {
-            const inverse = true;
-            return this.fftImpl(x, inverse);
-        }
-        fftImpl(x, inverse) {
-            const xData = this.texData.get(x.dataId);
-            const realProgram = new FFTProgram(COMPLEX_FFT.REAL, x.shape, inverse);
-            const imagProgram = new FFTProgram(COMPLEX_FFT.IMAG, x.shape, inverse);
-            const inputs = [
-                this.makeComplexComponentTensorInfo(x, xData.complexTensors.real),
-                this.makeComplexComponentTensorInfo(x, xData.complexTensors.imag),
-            ];
-            const real = this.compileAndRun(realProgram, inputs);
-            const imag = this.compileAndRun(imagProgram, inputs);
-            const complex = this.complex(real, imag).as2D(x.shape[0], x.shape[1]);
-            real.dispose();
-            imag.dispose();
-            return complex;
         }
         gatherND(x, indices) {
             const indicesShape = indices.shape;
@@ -67569,6 +68282,96 @@ return (round(mod(b, 2.0)) != 1) ?
         registerBackend('webgl', () => new MathBackendWebGL(), 2 /* priority */);
     }
 
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function identity$1(args) {
+        const { inputs, backend } = args;
+        const { x } = inputs;
+        backend.incRef(x.dataId);
+        return { dataId: x.dataId, shape: x.shape, dtype: x.dtype };
+    }
+    const identityConfig$1 = {
+        kernelName: Identity,
+        backendName: 'webgl',
+        kernelFunc: identity$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * In WebGL data is stored in GPU textures which can't be efficiently copied, so
+     * complex tensors share data with their real and imaginary components. Complex
+     * tensors increment the `complexParentRefCount` properties of the underlying
+     * data buckets to prevent them from being disposed, as the engine's disposal
+     * logic does not account for data sharing by complex tensors.
+     *
+     * When a complex tensor is disposed, it will explicitly decrease the
+     * `complexParentRefCount` properties of its underlying components.
+     */
+    function complex$2(args) {
+        const { inputs, backend } = args;
+        const { real, imag } = inputs;
+        const complexInfo = backend.makeTensorInfo(real.shape, 'complex64');
+        const complex = backend.texData.get(complexInfo.dataId);
+        const realTensorInfo = identity$1({ inputs: { x: real }, backend });
+        const realData = backend.texData.get(realTensorInfo.dataId);
+        realData.complexParentRefCount++;
+        const imagTensorInfo = identity$1({ inputs: { x: imag }, backend });
+        const imagData = backend.texData.get(imagTensorInfo.dataId);
+        imagData.complexParentRefCount++;
+        complex.complexTensorInfos = { real: realTensorInfo, imag: imagTensorInfo };
+        return complexInfo;
+    }
+    const complexConfig$1 = {
+        kernelName: Complex,
+        backendName: 'webgl',
+        kernelFunc: complex$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
     const CHECK_NAN_SNIPPET_UNARY = `if (isnan(x)) return x;`;
     const CHECK_NAN_SNIPPET_BINARY = `
   if (isnan(a)) return a;
@@ -67602,19 +68405,88 @@ return (round(mod(b, 2.0)) != 1) ?
      *     result has the same dtype as the first input. This is mainly used in
      *     comparison kernels, such as Equal, Less, Greater, etc.
      */
-    function binaryKernelFunc$1(opSnippet, packedOpSnippet, checkOutOfBoundsForPackedProgram, dtype) {
-        // TODO(jingjin): handle complex64.
+    function binaryKernelFunc$1({ opSnippet, packedOpSnippet, checkOutOfBounds = false, supportsComplex = false, cpuKernelImpl, dtype }) {
         return ({ inputs, backend }) => {
             const { a, b } = inputs;
             const webglBackend = backend;
-            const program = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') ?
-                new BinaryOpPackedProgram(packedOpSnippet, a.shape, b.shape, !!checkOutOfBoundsForPackedProgram) :
-                new BinaryOpProgram(opSnippet, a.shape, b.shape);
-            const $dtype = dtype || a.dtype;
-            const output = webglBackend.runWebGLProgram(program, [a, b], $dtype);
-            return output;
+            if (supportsComplex && a.dtype === 'complex64') {
+                const aData = webglBackend.texData.get(a.dataId);
+                const bData = webglBackend.texData.get(b.dataId);
+                const [real, imag] = [
+                    [aData.complexTensorInfos.real, bData.complexTensorInfos.real],
+                    [aData.complexTensorInfos.imag, bData.complexTensorInfos.imag]
+                ].map(complexParts => {
+                    const [aPart, bPart] = complexParts;
+                    const aHandle = {
+                        dataId: aPart.dataId,
+                        dtype: aPart.dtype,
+                        shape: a.shape
+                    };
+                    const bHandle = {
+                        dataId: bPart.dataId,
+                        dtype: bPart.dtype,
+                        shape: b.shape
+                    };
+                    const program = new BinaryOpProgram(opSnippet, a.shape, b.shape);
+                    return webglBackend.runWebGLProgram(program, [aHandle, bHandle], upcastType(aPart.dtype, bPart.dtype));
+                });
+                const complexOutput = complex$2({ inputs: { real, imag }, backend: webglBackend });
+                webglBackend.disposeIntermediateTensorInfo(real);
+                webglBackend.disposeIntermediateTensorInfo(imag);
+                // TODO(annxingyuan): Implement CPU forwarding for complex inputs.
+                return complexOutput;
+            }
+            const $dtype = dtype || upcastType(a.dtype, b.dtype);
+            if (webglBackend.shouldExecuteOnCPU([a, b]) && cpuKernelImpl != null) {
+                const aData = webglBackend.texData.get(a.dataId);
+                const bData = webglBackend.texData.get(b.dataId);
+                const [outValues, outShape] = cpuKernelImpl(a.shape, b.shape, aData.values, bData.values, $dtype);
+                const out = webglBackend.makeTensorInfo(outShape, $dtype);
+                const outData = webglBackend.texData.get(out.dataId);
+                outData.values = outValues;
+                return out;
+            }
+            const shouldUsePackedProgram = env().getBool('WEBGL_PACK_BINARY_OPERATIONS') &&
+                packedOpSnippet != null;
+            let program;
+            if (shouldUsePackedProgram) {
+                program = new BinaryOpPackedProgram(packedOpSnippet, a.shape, b.shape, checkOutOfBounds);
+            }
+            else {
+                program = new BinaryOpProgram(opSnippet, a.shape, b.shape);
+            }
+            return webglBackend.runWebGLProgram(program, [a, b], $dtype);
         };
     }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const ADD = 'return a + b;';
+    const addKernelFunc = binaryKernelFunc$1({
+        opSnippet: ADD,
+        packedOpSnippet: ADD,
+        supportsComplex: true,
+        cpuKernelImpl: addImplCPU
+    });
+    const addConfig$1 = {
+        kernelName: Add,
+        backendName: 'webgl',
+        kernelFunc: addKernelFunc
+    };
 
     /**
      * @license
@@ -67642,39 +68514,11 @@ return (round(mod(b, 2.0)) != 1) ?
         CHECK_NAN_SNIPPET_BINARY_PACKED + `
   return result;
 `;
-    const atan2KernelFunc = binaryKernelFunc$1(ATAN2, ATAN2_PACKED);
+    const atan2$1 = binaryKernelFunc$1({ opSnippet: ATAN2, packedOpSnippet: ATAN2_PACKED });
     const atan2Config = {
         kernelName: Atan2,
         backendName: 'webgl',
-        kernelFunc: atan2KernelFunc,
-    };
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    function identity$1(args) {
-        const { inputs, backend } = args;
-        const { x } = inputs;
-        backend.incRef(x.dataId);
-        return { dataId: x.dataId, shape: x.shape, dtype: x.dtype };
-    }
-    const identityConfig$1 = {
-        kernelName: Identity,
-        backendName: 'webgl',
-        kernelFunc: identity$1
+        kernelFunc: atan2$1,
     };
 
     /**
@@ -67865,7 +68709,7 @@ return (round(mod(b, 2.0)) != 1) ?
      * limitations under the License.
      * =============================================================================
      */
-    const batchNormKernelFunc$1 = ({ inputs, backend, attrs }) => {
+    const batchNorm$2 = ({ inputs, backend, attrs }) => {
         const { x, mean, variance, offset, scale } = inputs;
         assert(mean.shape.length === variance.shape.length, () => 'Batch normalization gradient requires mean and variance to have ' +
             'equal ranks.');
@@ -67897,7 +68741,511 @@ return (round(mod(b, 2.0)) != 1) ?
     const batchNormConfig$1 = {
         kernelName: FusedBatchNorm,
         backendName: 'webgl',
-        kernelFunc: batchNormKernelFunc$1,
+        kernelFunc: batchNorm$2,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const NOT_EQUAL = `return float(a != b);`;
+    const notEqual$2 = binaryKernelFunc$1({ opSnippet: NOT_EQUAL, dtype: 'bool' });
+    const notEqualConfig$1 = {
+        kernelName: NotEqual,
+        backendName: 'webgl',
+        kernelFunc: notEqual$2,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function real$2(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        const inputData = backend.texData.get(input.dataId);
+        return identity$1({ inputs: { x: inputData.complexTensorInfos.real }, backend });
+    }
+    const realConfig$1 = {
+        kernelName: Real,
+        backendName: 'webgl',
+        kernelFunc: real$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const TO_INT = `return float(int(x));`;
+    function int(input, backend) {
+        const program = new UnaryOpProgram(input.shape, TO_INT);
+        const output = backend.runWebGLProgram(program, [input], 'int32');
+        return { dataId: output.dataId, shape: output.shape, dtype: output.dtype };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function cast$3(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { dtype } = attrs;
+        // Casting to complex64.
+        if (dtype === 'complex64') {
+            if (x.dtype === 'complex64') {
+                return identity$1({ inputs: { x }, backend });
+            }
+            // TODO(annxingyuan): Import kernel function once zeros is modularized.
+            const zerosTensor = zeros(x.shape);
+            const floatX = cast$3({ inputs: { x }, backend, attrs: { dtype: 'float32' } });
+            const result = complex$2({ inputs: { real: floatX, imag: zerosTensor }, backend });
+            zerosTensor.dispose();
+            backend.disposeIntermediateTensorInfo(floatX);
+            return result;
+        }
+        // Casting from complex64
+        if (x.dtype === 'complex64') {
+            const realPart = real$2({ inputs: { input: x }, backend });
+            const result = cast$3({ inputs: { x: realPart }, backend, attrs: { dtype } });
+            backend.disposeIntermediateTensorInfo(realPart);
+            return result;
+        }
+        if (!hasEncodingLoss(x.dtype, dtype)) {
+            // We don't change the underlying data, since we cast to higher
+            // precision.
+            const result = identity$1({ inputs: { x }, backend });
+            return { dataId: result.dataId, shape: result.shape, dtype };
+        }
+        if (dtype === 'int32') {
+            return int(x, backend);
+        }
+        if (dtype === 'bool') {
+            const zerosTensorInfo = backend.makeTensorInfo([], 'bool', getTypedArrayFromDType('bool', 1));
+            const binaryInputs = { a: x, b: zerosTensorInfo };
+            const result = notEqual$2({ inputs: binaryInputs, backend });
+            backend.disposeIntermediateTensorInfo(zerosTensorInfo);
+            return result;
+        }
+        throw new Error(`Error in Cast: failed to cast ${x.dtype} to ${dtype}`);
+    }
+    const castConfig$1 = {
+        kernelName: Cast,
+        backendName: 'webgl',
+        kernelFunc: cast$3
+    };
+
+    /**
+     * @license
+     * Copyright 2017 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class ConcatProgram {
+        // Concats 2d tensors along axis=1. See comments in MathBackendWebGL.concat().
+        constructor(shapes) {
+            this.outputShape = [];
+            this.outputShape = computeOutShape$1(shapes, 1 /* axis */);
+            this.variableNames = shapes.map((_, i) => `T${i}`);
+            const offsets = new Array(shapes.length - 1);
+            offsets[0] = shapes[0][1];
+            for (let i = 1; i < offsets.length; i++) {
+                offsets[i] = offsets[i - 1] + shapes[i][1];
+            }
+            const snippets = [`if (yC < ${offsets[0]}) setOutput(getT0(yR, yC));`];
+            for (let i = 1; i < offsets.length; i++) {
+                const shift = offsets[i - 1];
+                snippets.push(`else if (yC < ${offsets[i]}) ` +
+                    `setOutput(getT${i}(yR, yC-${shift}));`);
+            }
+            const lastIndex = offsets.length;
+            const lastShift = offsets[offsets.length - 1];
+            snippets.push(`else setOutput(getT${lastIndex}(yR, yC-${lastShift}));`);
+            this.userCode = `
+      void main() {
+        ivec2 coords = getOutputCoords();
+        int yR = coords.x;
+        int yC = coords.y;
+
+        ${snippets.join('\n        ')}
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2019 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class ConcatPackedProgram {
+        constructor(shapes, axis) {
+            this.packedInputs = true;
+            this.packedOutput = true;
+            this.outputShape = [];
+            this.outputShape = computeOutShape$1(shapes, axis);
+            const shape = this.outputShape;
+            const rank = shape.length;
+            const dtype = getCoordsDataType(rank);
+            const coords = getChannels('coords', rank);
+            const channels = ['x', 'y', 'z', 'w', 'u', 'v'].slice(0, rank);
+            this.variableNames = shapes.map((_, i) => `T${i}`);
+            const offsets = new Array(shapes.length - 1);
+            offsets[0] = shapes[0][axis];
+            for (let i = 1; i < offsets.length; i++) {
+                offsets[i] = offsets[i - 1] + shapes[i][axis];
+            }
+            const channel = channels[axis];
+            const lastChannels = channels.slice(-2);
+            const allChannels = channels.join();
+            let getValueSnippet = `if (${channel} < ${offsets[0]}) {
+        return getChannel(
+            getT0(${allChannels}), vec2(${lastChannels.join()}));
+        }`;
+            for (let i = 1; i < offsets.length; i++) {
+                const shift = offsets[i - 1];
+                // Note: the >= comparison below may seem unnecessary given the check
+                // above but is needed to workaround branch execution issues on some
+                // devices. It makes all the conditions exclusive without relying on
+                // execution order.
+                getValueSnippet += `
+        if (${channel} < ${offsets[i]}  && ${channel} >= ${offsets[i - 1]}) {
+          return getChannel(
+            getT${i}(${shiftedChannels(channels, channel, shift)}),
+            vec2(${shiftedChannels(lastChannels, channel, shift)}));
+        }`;
+            }
+            const lastIndex = offsets.length;
+            const shift = offsets[offsets.length - 1];
+            getValueSnippet += `
+        return getChannel(
+          getT${lastIndex}(${shiftedChannels(channels, channel, shift)}),
+          vec2(${shiftedChannels(lastChannels, channel, shift)}));`;
+            this.userCode = `
+      float getValue(${channels.map(x => 'int ' + x)}) {
+        ${getValueSnippet}
+      }
+
+      void main() {
+        ${dtype} coords = getOutputCoords();
+        vec4 result = vec4(getValue(${coords}), 0., 0., 0.);
+
+        ${coords[rank - 1]} = ${coords[rank - 1]} + 1;
+        if (${coords[rank - 1]} < ${shape[rank - 1]}) {
+          result.g = getValue(${coords});
+        }
+
+        ${coords[rank - 2]} = ${coords[rank - 2]} + 1;
+        if (${coords[rank - 2]} < ${shape[rank - 2]}) {
+          result.a = getValue(${coords});
+        }
+
+        ${coords[rank - 1]} = ${coords[rank - 1]} - 1;
+        if (${coords[rank - 2]} < ${shape[rank - 2]} &&
+            ${coords[rank - 1]} < ${shape[rank - 1]}) {
+          result.b = getValue(${coords});
+        }
+        setOutput(result);
+      }
+    `;
+        }
+    }
+    /**
+     * Return an expression for coordinates into a vector where a given channel
+     * will be offset by [shift].
+     *
+     * @param channels the channels to consider
+     * @param channel the channel we want shifted
+     * @param shift  the amount to subtract from the channel.
+     *
+     * @returns a string of the form 'x, y-[shift], z' where any one channel can
+     * have the shift applied.
+     */
+    function shiftedChannels(channels, channel, shift) {
+        const channelIdx = channels.indexOf(channel);
+        const res = channels.map((c, idx) => {
+            if (idx === channelIdx) {
+                return `${c} - ${shift}`;
+            }
+            else {
+                return c;
+            }
+        });
+        return res.join();
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function imag$2(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        const inputData = backend.texData.get(input.dataId);
+        return identity$1({ inputs: { x: inputData.complexTensorInfos.imag }, backend });
+    }
+    const imagConfig$1 = {
+        kernelName: Imag,
+        backendName: 'webgl',
+        kernelFunc: imag$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function packedReshape(input, afterShape, backend) {
+        const input3DShape = [getBatchDim(input.shape),
+            ...getRowsCols(input.shape)];
+        const input3D = {
+            dtype: input.dtype,
+            shape: input3DShape,
+            dataId: input.dataId
+        };
+        const afterShapeAs3D = [getBatchDim(afterShape),
+            ...getRowsCols(afterShape)];
+        const program = new ReshapePackedProgram(afterShapeAs3D, input3DShape);
+        const preventEagerUnpackingOfOutput = true;
+        const output = backend.runWebGLProgram(program, [input3D], input.dtype, null /* customSetup */, preventEagerUnpackingOfOutput);
+        return { dataId: output.dataId, shape: afterShape, dtype: output.dtype };
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function reshape$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { x } = inputs;
+        const { shape } = attrs;
+        const webglBackend = backend;
+        const xSize = sizeFromShape(x.shape);
+        const $shape = inferFromImplicitShape(shape, xSize);
+        const $xSize = sizeFromShape($shape);
+        assert(xSize === $xSize, () => `The new shape (${$shape}) has ${$xSize} elements and the old ` +
+            `shape (${x.shape}) has ${xSize} elements. The new shape and old ` +
+            `shape must have the same number of elements.`);
+        const xTexData = webglBackend.texData.get(x.dataId);
+        if (xTexData.isPacked && !isReshapeFree(x.shape, $shape) &&
+            !(xTexData.texture !== null && isReshapeFree(xTexData.shape, $shape))) {
+            return packedReshape(x, $shape, webglBackend);
+        }
+        webglBackend.incRef(x.dataId);
+        return { dataId: x.dataId, shape: $shape, dtype: x.dtype };
+    }
+    const reshapeConfig$1 = {
+        kernelName: Reshape,
+        backendName: 'webgl',
+        kernelFunc: reshape$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function concatImpl(inputs, axis, backend) {
+        const dtype = inputs[0].dtype;
+        if (dtype === 'complex64') {
+            const reals = inputs.map((t) => real$2({ inputs: { input: t }, backend }));
+            const imags = inputs.map((t) => imag$2({ inputs: { input: t }, backend }));
+            const realConcated = concatImpl(reals, axis, backend);
+            const imagConcated = concatImpl(imags, axis, backend);
+            const result = complex$2({ inputs: { real: realConcated, imag: imagConcated }, backend });
+            reals.forEach(r => backend.disposeIntermediateTensorInfo(r));
+            imags.forEach(i => backend.disposeIntermediateTensorInfo(i));
+            backend.disposeIntermediateTensorInfo(realConcated);
+            backend.disposeIntermediateTensorInfo(imagConcated);
+            return result;
+        }
+        if (inputs.length > env().getNumber('WEBGL_MAX_TEXTURES_IN_SHADER')) {
+            const midIndex = Math.floor(inputs.length / 2);
+            const leftSide = concatImpl(inputs.slice(0, midIndex), axis, backend);
+            const rightSide = concatImpl(inputs.slice(midIndex), axis, backend);
+            const result = concatImpl([leftSide, rightSide], axis, backend);
+            backend.disposeIntermediateTensorInfo(leftSide);
+            backend.disposeIntermediateTensorInfo(rightSide);
+            return result;
+        }
+        if (env().getBool('WEBGL_PACK_ARRAY_OPERATIONS') &&
+            inputs[0].shape.length > 1) {
+            const program = new ConcatPackedProgram(inputs.map(t => t.shape), axis);
+            return backend.runWebGLProgram(program, inputs, dtype);
+        }
+        // Any concat of n-dimensional tensors across any axis can be reduced to
+        // a concatenation of two-dimensional tensors across the axis 1 by first
+        // partitioning the axes of the original tensors into those less than the
+        // axis to be concatenated and the rest. Then reshape the tensors
+        // into a two-dimensional tensor by collapsing these two sets of axes and
+        // concatenate the resulting matrices across the axis 1, finally reshaping
+        // the result to have the proper shape.
+        const outShape = computeOutShape$1(inputs.map(t => t.shape), axis);
+        const tensors2D = inputs.map(x => reshape$2({
+            inputs: { x },
+            attrs: { shape: [-1, sizeFromShape(x.shape.slice(axis))] },
+            backend
+        }));
+        const program = new ConcatProgram(tensors2D.map(t => t.shape));
+        const result = backend.runWebGLProgram(program, tensors2D, dtype);
+        tensors2D.forEach(r => backend.disposeIntermediateTensorInfo(r));
+        const reshapedResult = reshape$2({ inputs: { x: result }, attrs: { shape: outShape }, backend });
+        backend.disposeIntermediateTensorInfo(result);
+        return reshapedResult;
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function concat$2(args) {
+        const { inputs, backend, attrs } = args;
+        const { axis } = attrs;
+        const $axis = parseAxisParam(axis, inputs[0].shape)[0];
+        const outShape = computeOutShape$1(inputs.map(t => t.shape), $axis);
+        if (sizeFromShape(outShape) === 0) {
+            return backend.makeTensorInfo(outShape, inputs[0].dtype, []);
+        }
+        // Keep only non-empty tensors (ignore tensors with 0 in their shape).
+        const $inputs = inputs.filter(t => sizeFromShape(t.shape) > 0);
+        if ($inputs.length === 1) {
+            return $inputs[0];
+        }
+        const shapes = $inputs.map(t => t.shape);
+        assertParamsConsistent(shapes, $axis);
+        return concatImpl($inputs, $axis, backend);
+    }
+    const concatConfig$1 = {
+        kernelName: Concat,
+        backendName: 'webgl',
+        kernelFunc: concat$2
     };
 
     /**
@@ -67919,11 +69267,11 @@ return (round(mod(b, 2.0)) != 1) ?
     const COS = CHECK_NAN_SNIPPET_UNARY + `
   return cos(x);
 `;
-    const cosKernelFunc$1 = unaryKernelFunc$1(COS);
+    const cos$2 = unaryKernelFunc$1(COS);
     const cosConfig$1 = {
         kernelName: Cos,
         backendName: 'webgl',
-        kernelFunc: cosKernelFunc$1,
+        kernelFunc: cos$2,
     };
 
     /**
@@ -67970,11 +69318,156 @@ return a / b;`;
 
   return result;
 `;
-    const divKernelFunc = binaryKernelFunc$1(DIV, DIV_PACKED, true /* checkOutOfBoundsForPackedProgram */);
+    const div$2 = binaryKernelFunc$1({ opSnippet: DIV, packedOpSnippet: DIV_PACKED, checkOutOfBounds: true });
     const divConfig$1 = {
         kernelName: Div,
         backendName: 'webgl',
-        kernelFunc: divKernelFunc,
+        kernelFunc: div$2,
+    };
+
+    /**
+     * @license
+     * Copyright 2018 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class FFTProgram {
+        constructor(component, inputShape, inverse) {
+            this.variableNames = ['real', 'imag'];
+            const innerDim = inputShape[1];
+            this.outputShape = inputShape;
+            const exponentMultiplierSnippet = inverse ? `2.0 * ${Math.PI}` : `-2.0 * ${Math.PI}`;
+            const resultDenominator = inverse ? `${innerDim}.0` : '1.0';
+            let opString;
+            if (component === 'real') {
+                opString = 'return real * expR - imag * expI;';
+            }
+            else if (component === 'imag') {
+                opString = 'return real * expI + imag * expR;';
+            }
+            else {
+                throw new Error(`FFT component must be either "real" or "imag", got ${component}.`);
+            }
+            this.userCode = `
+      const float exponentMultiplier = ${exponentMultiplierSnippet};
+
+      float unaryOpComplex(float real, float expR, float imag, float expI) {
+        ${opString}
+      }
+
+      float mulMatDFT(int batch, int index) {
+        float indexRatio = float(index) / float(${innerDim});
+        float exponentMultiplierTimesIndexRatio =
+            exponentMultiplier * indexRatio;
+
+        float result = 0.0;
+
+        for (int i = 0; i < ${innerDim}; i++) {
+          // x = (-2|2 * PI / N) * index * i;
+          float x = exponentMultiplierTimesIndexRatio * float(i);
+          float expR = cos(x);
+          float expI = sin(x);
+          float real = getReal(batch, i);
+          float imag = getImag(batch, i);
+
+          result +=
+              unaryOpComplex(real, expR, imag, expI) / ${resultDenominator};
+        }
+
+        return result;
+      }
+
+      void main() {
+        ivec2 coords = getOutputCoords();
+        setOutput(mulMatDFT(coords[0], coords[1]));
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function fftImpl$1(x, inverse, backend) {
+        const xData = backend.texData.get(x.dataId);
+        const inputSize = sizeFromShape(x.shape);
+        // Collapse all outer dimensions to a single batch dimension.
+        const innerDimensionSize = x.shape[x.shape.length - 1];
+        const batch = inputSize / innerDimensionSize;
+        const input2D = reshape$2({ inputs: { x }, backend, attrs: { shape: [batch, innerDimensionSize] } });
+        const xShape = input2D.shape;
+        const realProgram = new FFTProgram('real', xShape, inverse);
+        const imagProgram = new FFTProgram('imag', xShape, inverse);
+        const inputs = [
+            {
+                dataId: xData.complexTensorInfos.real.dataId,
+                dtype: xData.complexTensorInfos.real.dtype,
+                shape: xShape
+            },
+            {
+                dataId: xData.complexTensorInfos.imag.dataId,
+                dtype: xData.complexTensorInfos.imag.dtype,
+                shape: xShape
+            }
+        ];
+        const realPart = backend.runWebGLProgram(realProgram, inputs, 'float32');
+        const imagPart = backend.runWebGLProgram(imagProgram, inputs, 'float32');
+        const complexOutput = complex$2({ inputs: { real: realPart, imag: imagPart }, backend });
+        backend.disposeIntermediateTensorInfo(realPart);
+        backend.disposeIntermediateTensorInfo(imagPart);
+        const complexOutputReshaped = reshape$2({ inputs: { x: complexOutput }, backend, attrs: { shape: x.shape } });
+        backend.disposeIntermediateTensorInfo(complexOutputReshaped);
+        return complexOutputReshaped;
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    function fft$2(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        return fftImpl$1(input, false /* inverse */, backend);
+    }
+    const fftConfig$1 = {
+        kernelName: FFT,
+        backendName: 'webgl',
+        kernelFunc: fft$2
     };
 
     /**
@@ -68230,6 +69723,123 @@ return a / b;`;
      * limitations under the License.
      * =============================================================================
      */
+    function ifft$2(args) {
+        const { inputs, backend } = args;
+        const { input } = inputs;
+        return fftImpl$1(input, true /* inverse */, backend);
+    }
+    const ifftConfig$1 = {
+        kernelName: IFFT,
+        backendName: 'webgl',
+        kernelFunc: ifft$2
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class MeanProgram {
+        constructor(reduceInfo, divisor) {
+            this.variableNames = ['x'];
+            const { windowSize, batchSize, inSize, outSize } = reduceInfo;
+            this.outputShape = [batchSize, outSize];
+            const windowSizeNearestVec4 = Math.floor(windowSize / 4) * 4;
+            const windowSizeVec4Remainder = windowSize % 4;
+            let updateSnippet = `sumValue += dot(values, ones);`;
+            if (divisor != null) {
+                const denominator = 1 / divisor;
+                updateSnippet = `sumValue += dot(values * ${isInt(denominator) ? denominator.toPrecision(2) :
+                denominator}, ones);`;
+            }
+            let checkOutOfBounds = '';
+            if (inSize % windowSize > 0) {
+                checkOutOfBounds = `
+        if (inIdx < 0 || inIdx >= ${inSize}) {
+          return 0.0;
+        }
+      `;
+            }
+            this.userCode = `
+      const vec4 ones = vec4(1.0, 1.0, 1.0, 1.0);
+
+      float getValue(int batch, int inIdx) {
+        ${checkOutOfBounds}
+        return getX(batch, inIdx);
+      }
+
+      void main() {
+        ivec2 coords = getOutputCoords();
+        int batch = coords[0];
+        int outIdx = coords[1];
+        int inOffset = outIdx * ${windowSize};
+
+        float sumValue = 0.0;
+
+        for (int i = 0; i < ${windowSizeNearestVec4}; i += 4) {
+          int inIdx = inOffset + i;
+          vec4 values = vec4(
+            getValue(batch, inIdx),
+            getValue(batch, inIdx + 1),
+            getValue(batch, inIdx + 2),
+            getValue(batch, inIdx + 3)
+          );
+
+          ${updateSnippet}
+        }
+
+        int inIdx = inOffset + ${windowSizeNearestVec4};
+        if (${windowSizeVec4Remainder === 1}) {
+          vec4 values = vec4(getValue(batch, inIdx), 0.0, 0.0, 0.0);
+
+          ${updateSnippet}
+        } else if (${windowSizeVec4Remainder === 2}) {
+          vec4 values = vec4(
+            getValue(batch, inIdx),
+            getValue(batch, inIdx + 1), 0.0, 0.0);
+
+          ${updateSnippet}
+        } else if (${windowSizeVec4Remainder === 3}) {
+          vec4 values = vec4(
+            getValue(batch, inIdx),
+            getValue(batch, inIdx + 1),
+            getValue(batch, inIdx + 2), 0.0);
+
+          ${updateSnippet}
+        }
+        setOutput(sumValue);
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
     // Returns an array of configuration objects that describe each stage of the
     // reduction.
     function getReductionStages(inShape) {
@@ -68250,88 +69860,24 @@ return a / b;`;
         let result = x;
         for (let i = 0; i < reductionStages.length; i++) {
             const { inSize, windowSize, outSize } = reductionStages[i];
-            const program = new ReduceProgram({ windowSize, inSize, batchSize: x.shape[0], outSize }, reductionType);
-            const previousResult = result;
+            let program;
+            let previousResult;
+            if (reductionType === 'mean') {
+                program = i === 0 ?
+                    new MeanProgram({ windowSize, inSize, batchSize: x.shape[0], outSize }, inSize) :
+                    new MeanProgram({ windowSize, inSize, batchSize: x.shape[0], outSize });
+            }
+            else {
+                program = new ReduceProgram({ windowSize, inSize, batchSize: x.shape[0], outSize }, reductionType);
+            }
+            previousResult = result;
             result = backend.runWebGLProgram(program, [result], dtype);
             if (previousResult.dataId !== x.dataId) {
-                backend.disposeData(previousResult.dataId);
+                backend.disposeIntermediateTensorInfo(previousResult);
             }
         }
         return result;
     }
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    function packedReshape(input, afterShape, backend) {
-        const input3DShape = [getBatchDim(input.shape),
-            ...getRowsCols(input.shape)];
-        const input3D = {
-            dtype: input.dtype,
-            shape: input3DShape,
-            dataId: input.dataId
-        };
-        const afterShapeAs3D = [getBatchDim(afterShape),
-            ...getRowsCols(afterShape)];
-        const program = new ReshapePackedProgram(afterShapeAs3D, input3DShape);
-        const preventEagerUnpackingOfOutput = true;
-        const output = backend.runWebGLProgram(program, [input3D], input.dtype, null /* customSetup */, preventEagerUnpackingOfOutput);
-        return { dataId: output.dataId, shape: afterShape, dtype: output.dtype };
-    }
-
-    /**
-     * @license
-     * Copyright 2020 Google LLC. All Rights Reserved.
-     * Licensed under the Apache License, Version 2.0 (the "License");
-     * you may not use this file except in compliance with the License.
-     * You may obtain a copy of the License at
-     *
-     * http://www.apache.org/licenses/LICENSE-2.0
-     *
-     * Unless required by applicable law or agreed to in writing, software
-     * distributed under the License is distributed on an "AS IS" BASIS,
-     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     * See the License for the specific language governing permissions and
-     * limitations under the License.
-     * =============================================================================
-     */
-    function reshape$2(args) {
-        const { inputs, backend, attrs } = args;
-        const { x } = inputs;
-        const { shape } = attrs;
-        const webglBackend = backend;
-        const xSize = sizeFromShape(x.shape);
-        const $shape = inferFromImplicitShape(shape, xSize);
-        const $xSize = sizeFromShape($shape);
-        assert(xSize === $xSize, () => `The new shape (${$shape}) has ${$xSize} elements and the old ` +
-            `shape (${x.shape}) has ${xSize} elements. The new shape and old ` +
-            `shape must have the same number of elements.`);
-        const xTexData = webglBackend.texData.get(x.dataId);
-        if (xTexData.isPacked && !isReshapeFree(x.shape, $shape) &&
-            !(xTexData.texture !== null && isReshapeFree(xTexData.shape, $shape))) {
-            return packedReshape(x, $shape, webglBackend);
-        }
-        webglBackend.incRef(x.dataId);
-        return { dataId: x.dataId, shape: $shape, dtype: x.dtype };
-    }
-    const reshapeConfig$1 = {
-        kernelName: Reshape,
-        backendName: 'webgl',
-        kernelFunc: reshape$2
-    };
 
     /**
      * @license
@@ -68714,6 +70260,457 @@ return a / b;`;
      * limitations under the License.
      * =============================================================================
      */
+    function meanImpl(x, reduceShape, outShape, backend) {
+        const inSize = sizeFromShape(reduceShape);
+        const xSize = sizeFromShape(x.shape);
+        const batchSize = xSize / inSize;
+        const reshapedInput = reshape$2({ inputs: { x }, attrs: { shape: [batchSize, inSize] }, backend });
+        const reduced = reduce(reshapedInput, 'float32', 'mean', backend);
+        const reshapedOutput = reshape$2({ inputs: { x: reduced }, attrs: { shape: outShape }, backend });
+        backend.disposeIntermediateTensorInfo(reshapedInput);
+        backend.disposeIntermediateTensorInfo(reduced);
+        return reshapedOutput;
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const meanConfig = {
+        kernelName: Mean,
+        backendName: 'webgl',
+        kernelFunc: ({ inputs, attrs, backend }) => {
+            const { x } = inputs;
+            const { keepDims, axis } = attrs;
+            const webglBackend = backend;
+            const xRank = x.shape.length;
+            const origAxes = parseAxisParam(axis, x.shape);
+            let axes = origAxes;
+            const permutedAxes = getAxesPermutation(axes, xRank);
+            const meanInputIsTransposed = permutedAxes != null;
+            const shouldExecuteOnCPU = webglBackend.shouldExecuteOnCPU([x]);
+            const intermediates = [];
+            let meanInput = x;
+            if (meanInputIsTransposed) {
+                if (shouldExecuteOnCPU) {
+                    const xTexData = webglBackend.texData.get(meanInput.dataId);
+                    const values = xTexData.values;
+                    const newShape = new Array(xRank);
+                    for (let i = 0; i < newShape.length; i++) {
+                        newShape[i] = x.shape[permutedAxes[i]];
+                    }
+                    const meanInputValues = transposeImplCPU(values, x.shape, x.dtype, permutedAxes, newShape);
+                    meanInput = webglBackend.makeTensorInfo(newShape, x.dtype);
+                    const meanInputData = webglBackend.texData.get(meanInput.dataId);
+                    meanInputData.values = meanInputValues;
+                }
+                else {
+                    meanInput = transposeImpl$1(x, permutedAxes, webglBackend);
+                }
+                intermediates.push(meanInput);
+                axes = getInnerMostAxes(axes.length, xRank);
+            }
+            assertAxesAreInnerMostDims('sum', axes, xRank);
+            const [meanOutShape, reduceShape] = computeOutAndReduceShapes(meanInput.shape, axes);
+            let outShape = meanOutShape;
+            if (keepDims) {
+                // rather than reshape at the end, set the target shape here.
+                outShape = expandShapeToKeepDim(meanOutShape, origAxes);
+            }
+            const out = meanImpl(meanInput, reduceShape, outShape, webglBackend);
+            for (const i of intermediates) {
+                webglBackend.disposeIntermediateTensorInfo(i);
+            }
+            return out;
+        }
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    class MirrorPadProgram {
+        constructor(xShape, paddings, mode) {
+            this.variableNames = ['x'];
+            this.outputShape = paddings.map((p, i) => p[0] /* beforePad */ + xShape[i] + p[1] /* afterPad */);
+            const rank = xShape.length;
+            const dtype = getCoordsDataType(rank);
+            const start = paddings.map(p => p[0]).join(',');
+            const end = paddings.map((p, i) => p[0] + xShape[i]).join(',');
+            const unpackedCoords = ['coords[0]', 'coords[1]', 'coords[2]', 'coords[3]'].slice(0, rank);
+            const offset = mode === 'reflect' ? 0 : 1;
+            if (rank === 1) {
+                this.userCode = `
+        int start = ${start};
+        int end = ${end};
+
+        void main() {
+          int outC = getOutputCoords();
+          if (outC < start) {
+            outC = start * 2 - outC - ${offset};
+          } else if(outC >= end) {
+            outC = (end - 1) * 2 - outC + ${offset};
+          }
+          setOutput(getX(outC - start));
+        }
+      `;
+                return;
+            }
+            this.userCode = `
+      ${dtype} start = ${dtype}(${start});
+      ${dtype} end = ${dtype}(${end});
+
+      void main() {
+        ${dtype} outC = getOutputCoords();
+        for (int i = 0; i < ${rank}; i++) {
+          if (outC[i] < start[i]) {
+            outC[i] = start[i] * 2 - outC[i] - ${offset};
+          } else if(outC[i] >= end[i]) {
+            outC[i] = (end[i] - 1) * 2 - outC[i] + ${offset};
+          }
+        }
+        ${dtype} coords = outC - start;
+        setOutput(getX(${unpackedCoords}));
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    /**
+     * Example shader code for
+     * `mirrorPad(tf.tensor1d([1, 2, 3], 'int32'), [[2, 2]], 'reflect')`
+     * ```
+     *    const int start = int(2);
+     *    const int end = int(5);
+     *
+     *    void main() {
+     *       int outputLoc = getOutputCoords();
+     *       vec4 result = vec4(0.);
+     *
+     *       int rc = outputLoc;
+     *
+     *       int source = rc;
+     *       if (source < start) {
+     *         source = start * 2 - source - 0;
+     *       } else if (source >= end) {
+     *         source = (end - 1) * 2 - source + 0;
+     *       }
+     *       source -= start;
+     *
+     *       result[0] = getChannel(getX(source), source);
+     *       rc += 1;
+     *       if(rc < 6) {
+     *          int source = rc;
+     *          if (source < start) {
+     *            source = start * 2 - source - 0;
+     *          } else if (source >= end) {
+     *            source = (end - 1) * 2 - source + 0;
+     *          }
+     *          source -= start;
+     *
+     *         result[1] = getChannel(getX(source), source);
+     *       }
+     *
+     *       setOutput(result);
+     *     }
+     * ```
+     */
+    class MirrorPadPackedProgram {
+        constructor(xShape, paddings, mode) {
+            this.variableNames = ['x'];
+            this.packedInputs = true;
+            this.packedOutput = true;
+            this.outputShape = paddings.map((p, i) => p[0] /* beforePad */ + xShape[i] + p[1] /* afterPad */);
+            const rank = xShape.length;
+            const dtype = getCoordsDataType(rank);
+            const start = paddings.map(p => p[0]).join(',');
+            const end = paddings.map((p, i) => p[0] + xShape[i]).join(',');
+            const coords = getChannels('rc', rank);
+            const source = getChannels('source', rank);
+            const cLimit = `${coords[rank - 1]} < ${this.outputShape[rank - 1]}`;
+            const innerDims = rank === 1 ? 'source' : `vec2(${source.slice(-2).join()})`;
+            const offset = mode === 'reflect' ? 0 : 1;
+            let mainLoop = '';
+            if (rank === 1) {
+                const padSetup = `
+        ${dtype} source = rc;
+        if (source < start) {
+          source = start * 2 - source - ${offset};
+        } else if (source >= end) {
+          source = (end - 1) * 2 - source + ${offset};
+        }
+        source -= start;
+      `;
+                mainLoop = `
+        ${dtype} rc = outputLoc;
+        ${padSetup}
+        result[0] = getChannel(getX(${source.join()}), ${innerDims});
+        ${coords[rank - 1]} += 1;
+        if(${cLimit}) {
+          ${padSetup}
+          result[1] = getChannel(getX(${source.join()}), ${innerDims});
+        }
+      `;
+            }
+            else {
+                const padSetup = `
+        ${dtype} source = rc;
+        ${dtype} lt = ${dtype}(lessThan(source, start));
+        ${dtype} gte = ${dtype}(greaterThanEqual(source, end));
+        ${dtype} orig = 1 - (lt + gte);
+        source = orig * source +
+                lt * (start * 2 - source - ${offset}) +
+                gte * ((end - 1) * 2 - source + ${offset});
+        source -= start;
+      `;
+                mainLoop = `
+        ${dtype} rc = outputLoc;
+        ${padSetup}
+        result[0] = getChannel(getX(${source.join()}), ${innerDims});
+        ${coords[rank - 1]} += 1;
+        if(${cLimit}) {
+          ${padSetup}
+          result[1] = getChannel(getX(${source.join()}), ${innerDims});
+        }
+        rc = outputLoc;
+        ${coords[rank - 2]} += 1;
+        if(${coords[rank - 2]} < ${this.outputShape[rank - 2]}) {
+          ${padSetup}
+          result[2] = getChannel(getX(${source.join()}), ${innerDims});
+          ${coords[rank - 1]} += 1;
+          if(${cLimit}) {
+            ${padSetup}
+            result[3] = getChannel(getX(${source.join()}), ${innerDims});
+          }
+        }
+      `;
+            }
+            this.userCode = `
+      const ${dtype} start = ${dtype}(${start});
+      const ${dtype} end = ${dtype}(${end});
+
+      void main() {
+        ${dtype} outputLoc = getOutputCoords();
+        vec4 result = vec4(0.);
+        ${mainLoop}
+        setOutput(result);
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const mirrorPadKernelFunc = ({ inputs, backend, attrs }) => {
+        const { x } = inputs;
+        const { paddings, mode } = attrs;
+        const program = env().getBool('WEBGL_PACK_ARRAY_OPERATIONS') ?
+            new MirrorPadPackedProgram(x.shape, paddings, mode) :
+            new MirrorPadProgram(x.shape, paddings, mode);
+        const output = backend.runWebGLProgram(program, [x], x.dtype);
+        return output;
+    };
+    const mirrorPadConfig$1 = {
+        kernelName: MirrorPad,
+        backendName: 'webgl',
+        kernelFunc: mirrorPadKernelFunc,
+    };
+
+    /**
+     * @license
+     * Copyright 2018 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    // (Ar + Ai)(Br + Bi) =
+    // ArBr + ArBi + AiBr + AiBi = ArBr - AB + ArBi + AiBr
+    // Yr = ArBr - AB
+    // Yi = ArBi + AiBr
+    const COMPLEX_MULTIPLY = {
+        REAL: 'return areal * breal - aimag * bimag;',
+        IMAG: 'return areal * bimag + aimag * breal;'
+    };
+    class BinaryOpComplexProgram {
+        constructor(op, aShape, bShape) {
+            this.variableNames = ['AReal', 'AImag', 'BReal', 'BImag'];
+            this.outputShape = assertAndGetBroadcastShape(aShape, bShape);
+            this.userCode = `
+      float binaryOpComplex(
+          float areal, float aimag, float breal, float bimag) {
+        ${op}
+      }
+
+      void main() {
+        float areal = getARealAtOutCoords();
+        float aimag = getAImagAtOutCoords();
+        float breal = getBRealAtOutCoords();
+        float bimag = getBImagAtOutCoords();
+        setOutput(binaryOpComplex(areal, aimag, breal, bimag));
+      }
+    `;
+        }
+    }
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const MUL = 'return a * b;';
+    function multiply$1(args) {
+        const { inputs, backend } = args;
+        const { a, b } = inputs;
+        const dtype = upcastType(a.dtype, b.dtype);
+        if (a.dtype === 'complex64') {
+            const aData = backend.texData.get(a.dataId);
+            const bData = backend.texData.get(b.dataId);
+            const realProgram = new BinaryOpComplexProgram(COMPLEX_MULTIPLY.REAL, a.shape, b.shape);
+            const imagProgram = new BinaryOpComplexProgram(COMPLEX_MULTIPLY.IMAG, a.shape, b.shape);
+            const inputs = [
+                {
+                    dataId: aData.complexTensorInfos.real.dataId,
+                    dtype: aData.complexTensorInfos.real.dtype,
+                    shape: a.shape
+                },
+                {
+                    dataId: aData.complexTensorInfos.imag.dataId,
+                    dtype: aData.complexTensorInfos.imag.dtype,
+                    shape: a.shape
+                },
+                {
+                    dataId: bData.complexTensorInfos.real.dataId,
+                    dtype: bData.complexTensorInfos.real.dtype,
+                    shape: b.shape
+                },
+                {
+                    dataId: bData.complexTensorInfos.imag.dataId,
+                    dtype: bData.complexTensorInfos.imag.dtype,
+                    shape: b.shape
+                }
+            ];
+            const realPart = backend.runWebGLProgram(realProgram, inputs, 'float32');
+            const imagPart = backend.runWebGLProgram(imagProgram, inputs, 'float32');
+            const complexOutput = complex$2({ inputs: { real: realPart, imag: imagPart }, backend });
+            backend.disposeIntermediateTensorInfo(realPart);
+            backend.disposeIntermediateTensorInfo(imagPart);
+            // TODO(annxingyuan): CPU forwarding for complex inputs.
+            return complexOutput;
+        }
+        if (backend.shouldExecuteOnCPU([a, b])) {
+            const aData = backend.texData.get(a.dataId);
+            const bData = backend.texData.get(b.dataId);
+            const [outValues, outShape] = multiplyImplCPU(a.shape, b.shape, aData.values, bData.values, dtype);
+            const out = backend.makeTensorInfo(outShape, dtype);
+            const outData = backend.texData.get(out.dataId);
+            outData.values = outValues;
+            return out;
+        }
+        let program;
+        if (env().getBool('WEBGL_PACK_BINARY_OPERATIONS')) {
+            program = new BinaryOpPackedProgram(MUL, a.shape, b.shape);
+        }
+        else {
+            program = new BinaryOpProgram(MUL, a.shape, b.shape);
+        }
+        return backend.runWebGLProgram(program, [a, b], dtype);
+    }
+    const multiplyConfig$1 = {
+        kernelName: Multiply,
+        backendName: 'webgl',
+        kernelFunc: multiply$1
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
     const nonMaxSuppressionV3Config = {
         kernelName: NonMaxSuppressionV3,
         backendName: 'webgl',
@@ -68906,11 +70903,11 @@ return a / b;`;
     const SIN = CHECK_NAN_SNIPPET_UNARY + `
   return sin(x);
 `;
-    const sinKernelFunc$1 = unaryKernelFunc$1(SIN);
+    const sin$2 = unaryKernelFunc$1(SIN);
     const sinConfig$1 = {
         kernelName: Sin,
         backendName: 'webgl',
-        kernelFunc: sinKernelFunc$1,
+        kernelFunc: sin$2,
     };
 
     /**
@@ -68930,11 +70927,11 @@ return a / b;`;
      * =============================================================================
      */
     const SQUARE = `return x * x;`;
-    const squareKernelFunc = unaryKernelFunc$1(SQUARE);
+    const square$2 = unaryKernelFunc$1(SQUARE);
     const squareConfig$1 = {
         kernelName: Square,
         backendName: 'webgl',
-        kernelFunc: squareKernelFunc,
+        kernelFunc: square$2,
     };
 
     /**
@@ -68954,11 +70951,40 @@ return a / b;`;
      * =============================================================================
      */
     const SQUARED_DIFFERENCE = 'return (a - b) * (a - b);';
-    const squaredDifferenceKernelFunc = binaryKernelFunc$1(SQUARED_DIFFERENCE, SQUARED_DIFFERENCE);
+    const squaredDifference$2 = binaryKernelFunc$1({ opSnippet: SQUARED_DIFFERENCE, packedOpSnippet: SQUARED_DIFFERENCE });
     const squaredDifferenceConfig$1 = {
         kernelName: SquaredDifference,
         backendName: 'webgl',
-        kernelFunc: squaredDifferenceKernelFunc,
+        kernelFunc: squaredDifference$2,
+    };
+
+    /**
+     * @license
+     * Copyright 2020 Google LLC. All Rights Reserved.
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     * =============================================================================
+     */
+    const SUB = 'return a - b;';
+    const subKernelFunc = binaryKernelFunc$1({
+        opSnippet: SUB,
+        packedOpSnippet: SUB,
+        supportsComplex: true,
+        cpuKernelImpl: subImplCPU
+    });
+    const subConfig$1 = {
+        kernelName: Sub,
+        backendName: 'webgl',
+        kernelFunc: subKernelFunc
     };
 
     /**
@@ -68978,11 +71004,11 @@ return a / b;`;
      * =============================================================================
      */
     const TAN = `return tan(x);`;
-    const tanKernelFunc$1 = unaryKernelFunc$1(TAN);
+    const tan$2 = unaryKernelFunc$1(TAN);
     const tanConfig$1 = {
         kernelName: Tan,
         backendName: 'webgl',
-        kernelFunc: tanKernelFunc$1,
+        kernelFunc: tan$2,
     };
 
     /**
@@ -69083,26 +71109,39 @@ return a / b;`;
      */
     // List all kernel configs here
     const kernelConfigs$1 = [
+        addConfig$1,
         atan2Config,
         avgPoolConfig$1,
         avgPoolBackpropConfig$1,
         batchNormConfig$1,
+        castConfig$1,
+        complexConfig$1,
+        concatConfig$1,
         cosConfig$1,
         divConfig$1,
+        fftConfig$1,
         flipLeftRightConfig$1,
         fromPixelsConfig,
         identityConfig$1,
+        ifftConfig$1,
+        imagConfig$1,
         maxConfig$1,
         maxPoolConfig$1,
         maxPoolBackpropConfig$1,
         maxPoolWithArgmaxConfig$1,
+        meanConfig,
+        mirrorPadConfig$1,
+        multiplyConfig$1,
         nonMaxSuppressionV3Config,
         nonMaxSuppressionV4Config$1,
         nonMaxSuppressionV5Config$1,
+        notEqualConfig$1,
+        realConfig$1,
         reshapeConfig$1,
         rotateWithOffsetConfig$1,
         sinConfig$1,
         squareConfig$1,
+        subConfig$1,
         squaredDifferenceConfig$1,
         tanConfig$1,
         transposeConfig$1,
@@ -69575,8 +71614,26 @@ return a / b;`;
             }
         }
 
-        setLatent(x, y, transferIndex) {
+        getLatent(x, y) {
+            const center = (this.n-1)/2;
+            const dx = x - center / center;
+            const dy = y - center / center;
+
+            return this.central.style.move(add$1(
+                this.vx.mul(this.central.scale * dx),
+                this.vy.mul(this.central.scale * dy)))
+        }
+
+        transferLatent(x, y) {
+            return transferBay.push(new TransferContainer(this.getLatent.bind(this, x, y), style => style.arraySync())) - 1
+        }
+
+        setLatentTransfer(x, y, transferIndex) {
             const style = tidy(() => transferBay[transferIndex].getValue());
+            this.setLatent(x, y, style);
+        }
+
+        setLatent(x, y, style) {
             const center = (this.n-1)/2;
             if (x !== center || y !== center) {
                 const dx = x - center / center;
@@ -69741,6 +71798,10 @@ return a / b;`;
 
         update() {
             this.explorers.forEach(explorer => explorer.update());
+        }
+
+        resolveTransfer(i) {
+            return tidy(() => transferBay[i].evaluate())
         }
     }
 
