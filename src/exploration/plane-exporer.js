@@ -78,8 +78,26 @@ export class PlaneExplorer extends Explorer {
         }
     }
 
-    setLatent(x, y, transferIndex) {
+    getLatent(x, y) {
+        const center = (this.n-1)/2
+        const dx = x - center / center
+        const dy = y - center / center
+
+        return this.central.style.move(tf.add(
+            this.vx.mul(this.central.scale * dx),
+            this.vy.mul(this.central.scale * dy)))
+    }
+
+    transferLatent(x, y) {
+        return transferBay.push(new TransferContainer(this.getLatent.bind(this, x, y), style => style.arraySync())) - 1
+    }
+
+    setLatentTransfer(x, y, transferIndex) {
         const style = tf.tidy(() => transferBay[transferIndex].getValue())
+        this.setLatent(x, y, style)
+    }
+
+    setLatent(x, y, style) {
         const center = (this.n-1)/2
         if (x !== center || y !== center) {
             const dx = x - center / center

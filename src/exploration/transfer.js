@@ -1,6 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
-
-
 class TransferBay extends Array {
     clear() {
         this.length = 0

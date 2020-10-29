@@ -5,6 +5,7 @@
     import { saveAs } from 'file-saver';
     import Plane from './exploration/Plane.svelte';
     import Direction from './exploration/Direction.svelte';
+    import Palette from './Palette.svelte';
 
     let scaleSlider
     let exploration
@@ -67,12 +68,23 @@
         display: flex;
         flex-flow: wrap;
     }
+
+    .palette {
+        width: 192px;
+        display: flex;
+        flex-flow: wrap;
+        border: 1px solid #ff9b28;
+    }
 </style>
 
 <div class="background">
     <Plane scale={scale} exploration={exploration} />
     <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
     <button on:click={() => exploration.reset()}>reset</button>
+
+    <div class="palette">
+        <Palette {exploration} />
+    </div>
 
     <div class="sidebar-container">
     <div class="sidebar">
