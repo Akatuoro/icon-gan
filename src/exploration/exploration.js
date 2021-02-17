@@ -61,7 +61,16 @@ class SharedState {
 
 export class Exploration {
     constructor() {
-        this.central = new SharedState()
+        this.central = new SharedState({
+            style: new Style([
+                {generationType: 'randomNormal', shape: [512]},
+                {generationType: 'randomNormal', shape: [512]},
+                {generationType: 'randomUniform', shape: [64, 64, 1], locked: true},
+                {generationType: 'randomNormal', shape: [512]},
+                {generationType: 'randomNormal', shape: [512]},
+                {generationType: 'randomNormal', shape: [512]},
+            ])
+        })
         this.central.onUpdate = () => this.update()
 
         this.explorers = []
@@ -98,7 +107,7 @@ export class Exploration {
 
     reset() {
         this.central.imageNoise.random()
-        this.central.style.random()
+        this.central.style.generateAll()
 
         //scale = 0.5
         this.explorers.forEach(explorer => explorer.reset())

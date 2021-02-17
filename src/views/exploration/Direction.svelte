@@ -6,6 +6,11 @@ export let exploration
 
 let explorer
 
+let selected = 0
+
+import * as tf from '@tensorflow/tfjs'
+window.tf = tf
+
 const n = 128
 
 const sideIndices = new Array(n)
@@ -43,7 +48,17 @@ async function init() {
 $: if (!explorer && exploration) {
     init()
 }
+
+$: if (selected !== undefined && explorer) {
+    explorer.dims = [selected]
+    explorer.generateAll()
+    explorer.update()
+}
 </script>
+
+{#each [0,1,2,3,4,5] as value}
+	<label><input type="radio" {value} bind:group={selected}> {value}</label>
+{/each}
 
 {#each sideIndices as _, i}
     <canvas

@@ -4,64 +4,27 @@ import {Explorer} from './explorer'
 import {getModel, toImg} from './model'
 import {BatchGenerator2DAIO, BatchExecutor} from './batch'
 import { transferBay, TransferContainer } from './transfer';
+import { Direction } from './input';
 
 export class PlaneExplorer extends Explorer {
     /**
      * Initializes class. Has to be called exactly once before the class can be used.
      */
-    async init({n = 3, config} = {}, central) {
+    async init({n = 3} = {}, central) {
         this.n = n
         this.central = central
 
         this.batchGenerator = new BatchGenerator2DAIO(n, n)
         this.batchExecutor = new BatchExecutor(this.batchGenerator)
 
-        if (config) {
-            this.setConfig(config)
-        }
-        else {
-            this.randomV()
-        }
-    }
-
-    get vx() {
-        return this._vx
-    }
-
-    /**
-     * Sets vx and disposes of old vx.
-     * @param {tf.Tensor || Array} vx
-     */
-    set vx(vx) {
-        this._vx && tf.dispose(this._vx)
-        this._vx = vx instanceof tf.Tensor?
-            vx :
-            tf.tensor(vx)
-    }
-
-    get vy() {
-        return this._vy
-    }
-
-    /**
-     * Sets vy and disposes of old vy.
-     * @param {tf.Tensor || Array} vy
-     */
-    set vy(vy) {
-        this._vy && tf.dispose(this._vy)
-        this._vy = vy instanceof tf.Tensor?
-            vy :
-            tf.tensor(vy)
+        this.vx = new Direction();
+        this.vy = new Direction();
+        this.reset();
     }
 
     reset() {
-        this.randomV()
-    }
-
-
-    randomV() {
-        this.vx = tf.oneHot(Math.floor(Math.random() * this.central.style.latentDim), this.central.style.latentDim)
-        this.vy = tf.oneHot(Math.floor(Math.random() * this.central.style.latentDim), this.central.style.latentDim)
+        this.central.style.defs.forEach((def, i) => this.vx.setByDefinition(def, i))
+        this.central.style.defs.forEach((def, i) => this.vy.setByDefinition(def, i))
     }
 
     moveTo(x, y) {
@@ -70,9 +33,9 @@ export class PlaneExplorer extends Explorer {
             const dx = x - center / center
             const dy = y - center / center
 
-            this.central.style = tf.tidy(() => this.central.style.move(tf.add(
-                this.vx.mul(this.central.scale * dx),
-                this.vy.mul(this.central.scale * dy))))
+            this.central.style = tf.tidy(() => this.central.style
+                .add(this.vx.mul(this.central.scale * dx))
+                .add(this.vy.mul(this.central.scale * dy)))
 
             this.update()
         }
@@ -83,9 +46,9 @@ export class PlaneExplorer extends Explorer {
         const dx = x - center / center
         const dy = y - center / center
 
-        return this.central.style.move(tf.add(
-            this.vx.mul(this.central.scale * dx),
-            this.vy.mul(this.central.scale * dy)))
+        return tf.tidy(() => this.central.style
+            .add(this.vx.mul(this.central.scale * dx))
+            .add(this.vy.mul(this.central.scale * dy)))
     }
 
     transferLatent(x, y) {
@@ -97,6 +60,7 @@ export class PlaneExplorer extends Explorer {
         this.setLatent(x, y, style)
     }
 
+    //todo
     setLatent(x, y, style) {
         const center = (this.n-1)/2
         if (x !== center || y !== center) {
@@ -143,9 +107,7 @@ export class PlaneExplorer extends Explorer {
                 this.vy.mul(this.central.scale),
                 positionInfo.map(([x, y]) => [x - (this.n - 1) / 2, y - (this.n - 1) / 2]))
 
-            const combined = this.central.imageNoise.combineWithStyles(exStyle)
-
-            const tensor = model.execute(combined)
+            const tensor = model.execute(exStyle)
 
             const imageData = toImg(tensor, 1)
 
