@@ -12,6 +12,9 @@ export class DirectionExplorer extends Explorer {
 
         this.dims = central.style.map((_, i) => i)
 
+        /** @type {'oneHot' | 'randomNormal'} */
+        this.type = 'oneHot'
+
         this.central = central
 
         this.generateAll()
@@ -30,14 +33,18 @@ export class DirectionExplorer extends Explorer {
 
     generateAll() {
         const v = []
-        console.log(this.n)
 
         for (let i = 0; i < this.n; i++) {
             v[i] = new Direction()
             this.dims.forEach(j => {
                 const def = this.central.style.defs[j]
                 if (def.shape && def.shape.length === 1) {
-                    v[i][j] = tf.oneHot(i, def.shape[0])
+                    if (this.type === 'oneHot') {
+                        v[i][j] = tf.oneHot(i, def.shape[0])
+                    }
+                    if (this.type === 'randomNormal') {
+                        v[i].setByDefinition({generationType: 'randomNormal', shape: def.shape}, j, true)
+                    }
                 }
                 else {
                     v[i].setByDefinition(def, j)

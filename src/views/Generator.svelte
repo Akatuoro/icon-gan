@@ -54,6 +54,8 @@
         const overlay = document.getElementById('overlay')
         overlay.hidden = true
     })
+
+    let sidebarOpen = false
 </script>
 
 <style>
@@ -114,8 +116,13 @@
     </div>
 
     <div class="sidebar-container">
-    <div class="sidebar">
-        <Direction exploration={exploration} />
-    </div>
+        {#if !sidebarOpen}
+        <button on:click={() => sidebarOpen = true}>Explore directions</button>
+        {:else}
+        <button on:click={() => sidebarOpen = false}>Close</button>
+        <div class="sidebar">
+            <Direction exploration={exploration} />
+        </div>
+        {/if}
     </div>
 </div>

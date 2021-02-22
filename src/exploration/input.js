@@ -47,7 +47,8 @@ export class Direction extends Array {
     }
 
     norm() {
-        return this.map(v => v && tf.norm(v)).reduce((val, acc) => val + acc, 0)
+        // returns string atm... todo
+        return this.map(v => v && tf.norm(v).dataSync()).reduce((val, acc) => val + acc, 0)
     }
 
     /**

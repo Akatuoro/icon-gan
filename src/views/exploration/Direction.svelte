@@ -8,17 +8,20 @@ let explorer
 
 let selected = 0
 
+let directionType = 'oneHot'
+
 import * as tf from '@tensorflow/tfjs'
 window.tf = tf
 
-const n = 128
+let n = 40
 
-const sideIndices = new Array(n)
+let sideIndices = new Array(n)
 
 let canvas = []
 
 function onSideUpdate(imageData, positionInfo) {
     const j = positionInfo
+    if (!canvas[j]) return
     const ctx = canvas[j].getContext('2d')
     ctx.putImageData(imageData, 0, 0)
 }
@@ -45,20 +48,38 @@ async function init() {
     explorer.update()
 }
 
+function reset() {
+    explorer.generateAll()
+    explorer.update()
+}
+
 $: if (!explorer && exploration) {
     init()
 }
 
-$: if (selected !== undefined && explorer) {
-    explorer.dims = [selected]
+$: if (selected !== undefined && directionType !== undefined && explorer) {
+    explorer.type = directionType
+    explorer.dims = directionType === 'randomNormal'? [0,1,2,3,4,5] : [selected]
+    const n = directionType === 'randomNormal'? 40 : 80
+    sideIndices = new Array(n)
+    explorer.n = n
     explorer.generateAll()
     explorer.update()
 }
+
 </script>
 
-{#each [0,1,2,3,4,5] as value}
-	<label><input type="radio" {value} bind:group={selected}> {value}</label>
+{#each ['oneHot', 'randomNormal'] as value}
+    <label><input type="radio" {value} bind:group={directionType}> {value}</label>
 {/each}
+
+{#if directionType === 'oneHot'}
+    {#each [0,1,2,3,4,5] as value}
+        <label><input type="radio" {value} bind:group={selected}> {value}</label>
+    {/each}
+{:else}
+    <button style="width:100%" on:click={() => reset()}>reset</button>
+{/if}
 
 {#each sideIndices as _, i}
     <canvas
@@ -71,3 +92,9 @@ $: if (selected !== undefined && explorer) {
         on:dragend={handleDragEnd}>
     </canvas>
 {/each}
+
+<style>
+    label {
+        color: #ff9b28;
+    }
+</style>
