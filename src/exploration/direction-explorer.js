@@ -23,6 +23,9 @@ export class DirectionExplorer extends Explorer {
     }
 
     set v(v) {
+        if (this.v) {
+            this.v.forEach(tf.dispose)
+        }
         tf.dispose(this.v)
         this._v = v
     }

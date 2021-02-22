@@ -58,8 +58,10 @@ export class Direction extends Array {
      */
     setByDefinition(def, i, normed = true) {
         if (def.locked) return
-        const result = generateFromDefinition(def)
-        this[i] = normed? result.div(tf.norm(result)) : result
+        this[i] = tf.tidy(() => {
+            const result = generateFromDefinition(def)
+            return normed? result.div(tf.norm(result)) : result
+        })
     }
 
     mul(dir) {
