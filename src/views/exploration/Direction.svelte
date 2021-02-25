@@ -1,6 +1,7 @@
 <script>
 import {proxy} from '../../exploration'
 import {dragged} from '../../state/dragged'
+import {onDestroy} from 'svelte'
 
 export let exploration
 
@@ -39,8 +40,11 @@ function handleDragEnd(e) {
     dragged.clear()
 }
 
+let explorerPromise
+
 async function init() {
-    explorer = await exploration.createDirectionExplorer({n})
+    explorerPromise = exploration.createDirectionExplorer({n})
+    explorer = await explorerPromise
     window.directionExplorer = explorer
 
     explorer.onUpdate = proxy(onSideUpdate)
@@ -56,6 +60,11 @@ function reset() {
 $: if (!explorer && exploration) {
     init()
 }
+
+onDestroy(async () => {
+    const explorer = await explorerPromise
+    explorer.release()
+})
 
 $: if (selected !== undefined && directionType !== undefined && explorer) {
     explorer.type = directionType
@@ -74,7 +83,7 @@ $: if (selected !== undefined && directionType !== undefined && explorer) {
 {/each}
 
 {#if directionType === 'oneHot'}
-    {#each [0,1,2,3,4,5] as value}
+    {#each [0,1,3,4,5] as value}
         <label><input type="radio" {value} bind:group={selected}> {value}</label>
     {/each}
 {:else}

@@ -20,6 +20,12 @@ export class PlaneExplorer extends Explorer {
         this.vx = new Direction();
         this.vy = new Direction();
         this.reset();
+
+        this.onRelease(() => {
+            this.batchExecutor.stop()
+            this.vx = undefined
+            this.vy = undefined
+        })
     }
 
     reset() {

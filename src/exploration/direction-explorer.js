@@ -20,6 +20,11 @@ export class DirectionExplorer extends Explorer {
         this.generateAll()
 
         this.batchExecutor = new BatchExecutor()
+
+        this.onRelease(() => {
+            this.batchExecutor.stop()
+            this.v = undefined
+        })
     }
 
     set v(v) {
