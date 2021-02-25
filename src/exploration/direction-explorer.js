@@ -68,7 +68,7 @@ export class DirectionExplorer extends Explorer {
     }
 
     getLatent(i) {
-        return this.central.style.move(this.v[i].mul(this.central.scale))
+        return this.central.style.add(this.v[i].mul(this.central.scale))
     }
 
     transferLatent(i) {

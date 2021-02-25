@@ -74,23 +74,28 @@ export class PlaneExplorer extends Explorer {
             const dy = y - center / center
 
             tf.tidy(() =>{
-                let v = this.central.style.sub(style)[0].reshape([-1]).div(this.central.scale).mul(-1)
+                let vs = this.central.style.sub(style).map(v => v.reshape([-1]).div(this.central.scale).mul(-1))
 
-                if (dx === 0) {
-                    this.vy = v.mul(dy)
-                }
-                else if (dy === 0) {
-                    this.vx = v.mul(dx)
-                }
-                else {
-                    const fix = this.vx.mul(-dx).add(this.vy.mul(dy))
+                vs.forEach((v, i) => {
+                    if(this.central.style.defs[i].locked) return
+                    if (dx === 0) {
+                        this.vy[i] = v.mul(dy)
+                    }
+                    else if (dy === 0) {
+                        this.vx[i] = v.mul(dx)
+                    }
+                    else {
+                        if (!this.vx[i]) this.vx[i] = tf.zeros(v.shape)
+                        if (!this.vy[i]) this.vy[i] = tf.zeros(v.shape)
+                        const fix = this.vx[i].mul(-dx).add(this.vy[i].mul(dy))
 
-                    this.vy = v.add(fix).div(2 * dy)
-                    this.vx = v.sub(fix).div(2 * dx)
-                }
+                        this.vy[i] = v.add(fix).div(2 * dy)
+                        this.vx[i] = v.sub(fix).div(2 * dx)
+                    }
+                })
 
-                tf.keep(this.vx)
-                tf.keep(this.vy)
+                this.vx.forEach(tf.keep)
+                this.vy.forEach(tf.keep)
             })
         }
         else {
