@@ -4,30 +4,71 @@ import {Explorer} from './explorer'
 import {getModel, toImg} from './model'
 import {BatchExecutor} from './batch'
 import { transferBay, TransferContainer } from './transfer';
+import { Direction, generateFromDefinition } from './input';
 
 export class DirectionExplorer extends Explorer {
     init({n = 9} = {}, central) {
         this.n = n
 
+        this.dims = central.style.map((_, i) => i)
+
+        /** @type {'oneHot' | 'randomNormal'} */
+        this.type = 'oneHot'
+
         this.central = central
 
-        this.batchDef = []
-        this.v = []
-
-        for (let i = 0; i < this.n; i++) {
-            this.batchDef.push(i)
-            this.v.push(tf.oneHot(i, central.style.latentDim))
-        }
+        this.generateAll()
 
         this.batchExecutor = new BatchExecutor()
+
+        this.onRelease(() => {
+            this.batchExecutor.stop()
+            this.v = undefined
+        })
+    }
+
+    set v(v) {
+        if (this.v) {
+            this.v.forEach(tf.dispose)
+        }
+        tf.dispose(this.v)
+        this._v = v
+    }
+
+    get v() {
+        return this._v
+    }
+
+    generateAll() {
+        const v = []
+
+        for (let i = 0; i < this.n; i++) {
+            v[i] = new Direction()
+            this.dims.forEach(j => {
+                const def = this.central.style.defs[j]
+                if (def.shape && def.shape.length === 1) {
+                    if (this.type === 'oneHot') {
+                        v[i][j] = tf.oneHot(i, def.shape[0])
+                    }
+                    if (this.type === 'randomNormal') {
+                        v[i].setByDefinition({generationType: 'randomNormal', shape: def.shape}, j, true)
+                    }
+                }
+                else {
+                    v[i].setByDefinition(def, j)
+                }
+            })
+        }
+
+        this.v = v
     }
 
     getV(i) {
-        return this.v[i].arraySync()
+        return this.v[i].map(vec => vec.arraySync())
     }
 
     getLatent(i) {
-        return this.central.style.move(this.v[i].mul(this.central.scale))
+        return this.central.style.add(this.v[i].mul(this.central.scale))
     }
 
     transferLatent(i) {
@@ -35,7 +76,7 @@ export class DirectionExplorer extends Explorer {
     }
 
     update() {
-        this.batchExecutor.iterable = this.batchDef
+        this.batchExecutor.iterable = this.v.map((_, i) => i);
         this.batchExecutor.start(this.queueStep.bind(this))
     }
 
@@ -43,11 +84,9 @@ export class DirectionExplorer extends Explorer {
         const model = await getModel()
 
         tf.tidy(() => {
-            const exStyle = this.central.style.move(this.v[positionInfo].mul(this.central.scale))
+            const exStyle = this.central.style.add(this.v[positionInfo].mul(this.central.scale)).expandSingle()
 
-            const combined = this.central.imageNoise.combineWithStyles(exStyle)
-
-            const tensor = model.execute(combined)
+            const tensor = model.execute(exStyle)
 
             const imageData = toImg(tensor, 1)
 
