@@ -6,6 +6,7 @@ export let exploration
 
 export let scale
 
+/** @type {import('../../exploration/plane-exporer.js').PlaneExplorer} */
 let explorer
 
 

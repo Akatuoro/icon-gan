@@ -63,7 +63,7 @@ $: if (!explorer && exploration) {
 
 onDestroy(async () => {
     const explorer = await explorerPromise
-    explorer.release()
+    explorer && explorer.release()
 })
 
 $: if (selected !== undefined && directionType !== undefined && explorer) {

@@ -6,6 +6,7 @@ export const MODEL_URL = 'https://raw.githubusercontent.com/Akatuoro/nn-models/m
 
 let modelPromise
 
+/** @returns {Promise<tf.GraphModel>} */
 export function getModel() {
     if (!modelPromise) {
         modelPromise = loadGraphModel(MODEL_URL)
