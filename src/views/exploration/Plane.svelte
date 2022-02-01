@@ -1,6 +1,7 @@
 <script>
 import {proxy} from "../../exploration";
 import {dragged} from '../../state/dragged'
+import {onDestroy} from 'svelte'
 
 export let exploration
 
@@ -8,6 +9,7 @@ export let scale
 
 /** @type {import('../../exploration/plane-exporer.js').PlaneExplorer} */
 let explorer
+let explorerPromise
 
 
 let canvas = new Array(3).fill(1).map(() => new Array(3).fill(1))
@@ -55,12 +57,18 @@ async function handleDrop(x, y, e) {
 }
 
 async function init() {
-    explorer = await exploration.createPlaneExplorer()
+    explorerPromise = exploration.createPlaneExplorer();
+    explorer = await explorerPromise
     explorer.onUpdate = proxy(onUpdate)
     window.planeExplorer = explorer
 
     explorer.update()
 }
+
+onDestroy(async () => {
+    const explorer = await explorerPromise
+    explorer && explorer.release()
+})
 
 $: if (!explorer && exploration) {
     init()
@@ -69,13 +77,20 @@ $: if (!explorer && exploration) {
 </script>
 
 <style>
-    .canvas-row {
-        display: flex;
+    .outer {
+        display: grid;
+        height: 100%;
+        place-items: center;
+    }
+    .box {
+        display: grid;
+        grid-template: repeat(3, auto) / repeat(3, auto)
     }
 </style>
 
-{#each [0, 1, 2] as x}
-    <div class="canvas-row">
+<div class="outer">
+<div class="box">
+    {#each [0, 1, 2] as x}
         {#each [0, 1, 2] as y}
             <canvas bind:this={canvas[x][y]}
                 on:click={onCanvasClick.bind(null, x, y)}
@@ -90,5 +105,6 @@ $: if (!explorer && exploration) {
                 ondragover="return false">
             </canvas>
         {/each}
-    </div>
-{/each}
+    {/each}
+</div>
+</div>

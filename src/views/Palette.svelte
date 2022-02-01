@@ -43,7 +43,7 @@ async function handleDrop(i, e) {
 
 
 {#each slots as slot, i}
-<canvas
+<canvas class="border"
     bind:this={canvas[i]}
     width={64}
     height={64}
@@ -54,3 +54,11 @@ async function handleDrop(i, e) {
     ondragover="return false">
 </canvas>
 {/each}
+
+<style>
+	.border {
+		border: 1px solid #ff9b28;
+		outline: none;
+		margin: 5px;
+	}
+</style>

@@ -26,6 +26,6 @@
 </script>
 
 
-{#if currentHash === "#model"}
+{#if currentHash === '#model'}
     <Generator />
 {/if}

@@ -7,6 +7,7 @@
     import Direction from './exploration/Direction.svelte';
     import Palette from './Palette.svelte';
     import { dragged } from '../state/dragged';
+    import Workspace from './Workspace.svelte';
 
     let scaleSlider
     let exploration
@@ -44,6 +45,8 @@
 
         // updates bindings
         exploration = _exploration
+        elements.forEach((element) => element.props.exploration = exploration);
+        elements = [...elements];
 
         console.info('model loaded, update')
         exploration.update()
@@ -55,74 +58,41 @@
         overlay.hidden = true
     })
 
-    let sidebarOpen = false
+    let elements = [{
+        name: "Plane Explorer",
+        component: Plane,
+        expanded: false,
+        props: { exploration, scale }
+    },
+    {
+        name: "Direction Explorer",
+        component: Direction,
+        expanded: false,
+        props: { exploration }
+    }]
 </script>
 
+
+<Workspace {elements} >
+    <div style="display:grid;" slot="right-side">
+        <Palette {exploration} />
+    </div>
+
+    <div slot="footer-left">
+        <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
+        <button on:click={() => exploration.reset()}>reset</button>
+    </div>
+
+    <div slot="footer-right" class="download-drop"
+        on:drop={handleDownloadDrop}
+        ondragover="return false">
+    </div>
+</Workspace>
+
 <style>
-    .background {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-
-        background-color: #051A33;
-    }
-
-    .sidebar-container {
-        position:absolute;
-        top: 0px;
-        right: 0px;
-        height: 100%;
-        overflow: scroll;
-    }
-
-    .sidebar {
-        width: 128px;
-        display: flex;
-        flex-flow: wrap;
-    }
-
-    .palette {
-        width: 192px;
-        display: flex;
-        flex-flow: wrap;
-        border: 1px solid #ff9b28;
-    }
-
     .download-drop {
-        position:absolute;
-        bottom: 0px;
-        left: 0px;
         height: 64px;
         width: 64px;
         border: 1px dashed #ff9b28;
     }
 </style>
-
-<div class="background">
-    <Plane scale={scale} exploration={exploration} />
-    <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
-    <button on:click={() => exploration.reset()}>reset</button>
-
-    <div class="palette">
-        <Palette {exploration} />
-    </div>
-
-    <div class="download-drop"
-        on:drop={handleDownloadDrop}
-        ondragover="return false">
-    </div>
-
-    <div class="sidebar-container">
-        {#if !sidebarOpen}
-        <button on:click={() => sidebarOpen = true}>Explore directions</button>
-        {:else}
-        <button on:click={() => sidebarOpen = false}>Close</button>
-        <div class="sidebar">
-            <Direction exploration={exploration} />
-        </div>
-        {/if}
-    </div>
-</div>
