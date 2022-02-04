@@ -107,7 +107,7 @@ export class BatchGenerator {
     reset() { }
 
     /**
-     * `next` function ccording to the
+     * `next` function according to the
      * [iterator protocol](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#The_iterator_protocol).
      * 
      * **Implemented by derived classes.**

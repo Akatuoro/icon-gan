@@ -53,8 +53,8 @@ export class Direction extends Array {
 
     /**
      * 
-     * @param {*} i 
      * @param {InputDefinition} def 
+     * @param {*} i 
      */
     setByDefinition(def, i, normed = true) {
         if (def.locked) return
@@ -211,7 +211,7 @@ export class Style extends Array {
     }
 
     static fromData(data) {
-        return new this(data.map(d => tf.tensor(d)))
+        return new this(data.defs, data.map(d => tf.tensor(d)))
     }
 }
 
