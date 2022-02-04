@@ -1,7 +1,7 @@
 <script>
     import { writable } from 'svelte/store'
     import {onMount} from 'svelte'
-    import {explore, proxy} from '../exploration'
+    import {explore} from '../exploration'
     import { saveAs } from 'file-saver';
     import Plane from './exploration/Plane.svelte';
     import Direction from './exploration/Direction.svelte';
@@ -38,7 +38,6 @@
 
     onMount(async () => {
         const _exploration = await explore();
-        window.exploration = _exploration
 
         console.info('loading model')
         await _exploration.preLoad()

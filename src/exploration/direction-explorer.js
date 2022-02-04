@@ -4,7 +4,7 @@ import {Explorer} from './explorer'
 import {getModel, toImg} from './model'
 import {BatchExecutor} from './batch'
 import { transferBay, TransferContainer } from './transfer';
-import { Direction, generateFromDefinition } from './input';
+import { Direction } from './input';
 
 export class DirectionExplorer extends Explorer {
     init({n = 9} = {}, central) {

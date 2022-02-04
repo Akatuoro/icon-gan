@@ -1,5 +1,4 @@
 <script>
-	import { onMount } from "svelte";
 	import Holder from "./Holder.svelte";
 	import { quintOut } from "svelte/easing";
 	import { crossfade } from "svelte/transition";
@@ -94,7 +93,7 @@
 	.workarea {
 		display: grid;
 		grid-gap: 1rem;
-		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 	}
 
 	.holder-with-content {
@@ -119,6 +118,7 @@
 	}
 	main {
 		grid-column: 2 / 3;
+		overflow-y: auto;
 	}
 	footer {
 		grid-column: 1 / 4;
@@ -132,6 +132,7 @@
 	}
 	.footer-center {
 		grid-column: 2 / 2;
+		overflow: auto;
 	}
 	.footer-left {
 		grid-column: 1 / 1;

@@ -66,7 +66,6 @@ export class PlaneExplorer extends Explorer {
         this.setLatent(x, y, style)
     }
 
-    //todo
     setLatent(x, y, style) {
         const center = (this.n-1)/2
         if (x !== center || y !== center) {

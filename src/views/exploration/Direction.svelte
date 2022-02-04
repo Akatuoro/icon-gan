@@ -11,8 +11,6 @@ let selected = 0
 
 let directionType = 'oneHot'
 
-import * as tf from '@tensorflow/tfjs'
-window.tf = tf
 
 let n = 40
 
