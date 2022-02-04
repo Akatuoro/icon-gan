@@ -6,6 +6,7 @@ import {exposed} from './exposed'
 import { DirectionExplorer } from './direction-explorer';
 import { PlaneExplorer } from './plane-exporer';
 import { transferBay } from './transfer';
+import { InterpolationExplorer } from './interpolation-explorer';
 
 
 class SharedState {
@@ -83,30 +84,29 @@ export class Exploration {
         this.central.scale = scale
     }
 
-    createPlaneExplorer(options) {
-        const planeExplorer = new PlaneExplorer()
+    createExplorer(cls, options) {
+        const explorer = new cls()
 
-        this.explorers.push(planeExplorer)
-        planeExplorer.onRelease(() => this.explorers.splice(this.explorers.indexOf(planeExplorer), 1))
+        this.explorers.push(explorer)
+        explorer.onRelease(() => this.explorers.splice(this.explorers.indexOf(explorer), 1))
 
-        planeExplorer.init(options, this.central)
+        explorer.init(options, this.central)
 
-        const proxy = exposed.proxy(planeExplorer)
-        planeExplorer.onRelease(() => proxy[exposed.release]?.())
+        const proxy = exposed.proxy(explorer)
+        explorer.onRelease(() => proxy[exposed.release]?.())
         return proxy;
     }
 
+    createPlaneExplorer(options) {
+        return this.createExplorer(PlaneExplorer, options);
+    }
+
     createDirectionExplorer(options) {
-        const directionExplorer = new DirectionExplorer()
+        return this.createExplorer(DirectionExplorer, options);
+    }
 
-        this.explorers.push(directionExplorer)
-        directionExplorer.onRelease(() => this.explorers.splice(this.explorers.indexOf(directionExplorer), 1))
-
-        directionExplorer.init(options, this.central)
-
-        const proxy = exposed.proxy(directionExplorer)
-        directionExplorer.onRelease(() => proxy[exposed.release]?.())
-        return proxy;
+    createInterpolationExplorer(options) {
+        return this.createExplorer(InterpolationExplorer, options);
     }
 
     reset() {

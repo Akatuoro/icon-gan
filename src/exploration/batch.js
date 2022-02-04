@@ -206,3 +206,26 @@ export class BatchGenerator2D extends BatchGenerator {
         }
     }
 }
+
+export class BatchGenerator1D extends BatchGenerator {
+    constructor(n) {
+        super()
+        this.n = n
+        this.i = 0
+    }
+
+    reset() {
+        this.i = 0
+    }
+
+    next() {
+        if (this.i < this.n) return {
+            done: false,
+            value: this.i++
+        }
+        else return {
+            done: true,
+            value: undefined
+        }
+    }
+}

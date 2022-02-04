@@ -8,6 +8,7 @@
     import Palette from './Palette.svelte';
     import { dragged } from '../state/dragged';
     import Workspace from './Workspace.svelte';
+    import Interpolation from './exploration/Interpolation.svelte';
 
     let scaleSlider
     let exploration
@@ -66,6 +67,12 @@
     {
         name: "Direction Explorer",
         component: Direction,
+        expanded: false,
+        props: { exploration }
+    },
+    {
+        name: "Interpolation Explorer",
+        component: Interpolation,
         expanded: false,
         props: { exploration }
     }]
