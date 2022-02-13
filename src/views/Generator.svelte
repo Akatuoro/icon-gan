@@ -9,8 +9,8 @@
     import { dragged } from '../state/dragged';
     import Workspace from './Workspace.svelte';
     import Interpolation from './exploration/Interpolation.svelte';
+    import GlobalSettings from './exploration/GlobalSettings.svelte';
 
-    let scaleSlider
     let exploration
 
     const scale = writable(0.5)
@@ -20,10 +20,6 @@
         exploration.scale = value
         exploration.update()
 	});
-
-    function onScaleSliderChange(e) {
-        scale.set(e.target.value / 10)
-    }
 
     async function handleDownloadDrop() {
         const {imageData} = dragged
@@ -61,7 +57,7 @@
     let elements = [{
         name: "Plane Explorer",
         component: Plane,
-        expanded: false,
+        expanded: true,
         props: { exploration, scale }
     },
     {
@@ -75,6 +71,12 @@
         component: Interpolation,
         expanded: false,
         props: { exploration }
+    },
+    {
+        name: "Global Settings",
+        component: GlobalSettings,
+        expanded: true,
+        props: { exploration, scale }
     }]
 </script>
 
@@ -82,11 +84,6 @@
 <Workspace {elements} >
     <div style="display:grid;" slot="right-side">
         <Palette {exploration} />
-    </div>
-
-    <div slot="footer-left">
-        <input bind:this={scaleSlider} on:input={onScaleSliderChange} type="range" min="1" max="500" value="50" id="scale-slider">
-        <button on:click={() => exploration.reset()}>reset</button>
     </div>
 
     <div slot="footer-right" class="download-drop"

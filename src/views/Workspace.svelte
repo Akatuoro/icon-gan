@@ -125,6 +125,8 @@
 		display: grid;
 		grid-gap: 1rem;
 		grid-template-columns: auto 1fr auto;
+
+		max-height: 72px;
 	}
 
 	.footer-right {

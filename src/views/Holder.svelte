@@ -19,6 +19,9 @@
 		padding: 1rem;
 		color: #ff9b28;
 		cursor: pointer;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	[type="checkbox"] {
 		z-index: 0;
