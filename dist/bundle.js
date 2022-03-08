@@ -80454,6 +80454,16 @@ return a / b;`;
             return this.map(t => t.arraySync())
         }
 
+        clone() {
+            return new this.constructor(this.defs, this.map(t => t.clone()))
+        }
+
+        static from(style) {
+            return style instanceof Style?
+                style.clone() :
+                Style.fromData(style)
+        }
+
         static fromData(data) {
             return new this(data.defs, data.map(d => tensor(d)))
         }
@@ -80670,29 +80680,6 @@ return a / b;`;
             return {
                 done: false,
                 value: positions,
-            }
-        }
-    }
-
-    class BatchGenerator1D extends BatchGenerator {
-        constructor(n) {
-            super();
-            this.n = n;
-            this.i = 0;
-        }
-
-        reset() {
-            this.i = 0;
-        }
-
-        next() {
-            if (this.i < this.n) return {
-                done: false,
-                value: this.i++
-            }
-            else return {
-                done: true,
-                value: undefined
             }
         }
     }
@@ -80932,25 +80919,27 @@ return a / b;`;
     }
 
     class InterpolationExplorer extends Explorer {
-    	init({ n = 9 } = {}, central) {
+    	init({ n = 9, m = 9 } = {}, central) {
     		this.n = n;
+    		this.m = m;
 
     		this.central = central;
-    		this.v = new Direction$1();
+    		this.A = central.style.clone();
+    		this.B = central.style.clone();
+    		this.C = central.style.clone();
+    		this.vb = new Direction$1();
+    		this.vc = new Direction$1();
 
-    		this.batchGenerator = new BatchGenerator1D(n);
+    		this.batchGenerator = new BatchGenerator2DAIO(n, m);
     		this.batchExecutor = new BatchExecutor();
 
     		this.onRelease(() => {
     			this.batchExecutor.stop();
-    			this.source = undefined;
-    			this.target = undefined;
-    			this.v = undefined;
     		});
     	}
 
     	set n(n) {
-    		if (n !== this.n) this.batchGenerator = new BatchGenerator1D(this.n);
+    		if (n !== this.n) this.batchGenerator = new BatchGenerator2DAIO(this.n, this.m);
     		this._n = n;
     	}
 
@@ -80958,36 +80947,50 @@ return a / b;`;
     		return this._n
     	}
 
-    	set v(v) {
-    		dispose(this.v);
-    		this._v = v;
+    	set m(m) {
+    		if (m !== this.m) this.batchGenerator = new BatchGenerator2DAIO(this.n, this.m);
+    		this._m = m;
     	}
 
-    	get v() {
-    		return this._v
+    	get m() {
+    		return this._m
     	}
 
 
-    	getLatent(i) {
-    		return this.central.style.add(this.v.mul(i / (this.n - 1)))
+    	getLatent(x, y = 0) {
+    		return this.A.add(this.vb.mul(x / (this.n - 1))).add(this.vc.mul(y / (this.m - 1)))
     	}
 
-    	transferLatent(i) {
-    		return transferBay.push(new TransferContainer(this.getLatent.bind(this, i), style => style.arraySync())) - 1
+    	transferLatent(x, y = 0) {
+    		return transferBay.push(new TransferContainer(this.getLatent.bind(this, x, y), style => style.arraySync())) - 1
     	}
 
-    	setLatentTransfer(i, transferIndex) {
+    	setLatentTransfer(x, y, transferIndex) {
     		const style = tidy(() => transferBay[transferIndex].getValue());
-    		this.setLatent(i, style);
+    		this.setLatent(x, y, style);
     	}
 
-    	setLatent(i, style) {
-    		tidy(() => {
-    			this.central.style.sub(style).forEach((val, j) => {
-    				this.v[j] = val.mul(-1);
-    				keep(this.v[j]);
+    	setLatent(x, y, style) {
+    		if (x === 0 && y === 0) {
+    			dispose(this.A);
+    			this.A = Style.from(style);
+    		}
+    		else if (x > y) {
+    			tidy(() => {
+    				this.A.sub(style).forEach((val, j) => {
+    					this.vb[j] = val.mul(-1);
+    					keep(this.vb[j]);
+    				});
     			});
-    		});
+    		}
+    		else {
+    			tidy(() => {
+    				this.A.sub(style).forEach((val, j) => {
+    					this.vc[j] = val.mul(-1);
+    					keep(this.vc[j]);
+    				});
+    			});
+    		}
     		this.update();
     	}
 
@@ -80996,17 +80999,20 @@ return a / b;`;
     		this.batchExecutor.start(this.queueStep.bind(this));
     	}
 
-    	async queueStep(i) {
+    	async queueStep(positionInfo) {
     		const model = await getModel();
 
     		tidy(() => {
-    			const exStyle = this.central.style.add(this.v.mul(i / (this.n - 1))).expandSingle();
+                const exStyle = this.A.batchExpand2d(
+                    this.vb,
+                    this.vc,
+                    positionInfo.map(([x, y]) => [x / this.n, y / this.m]));
 
     			const tensor = model.execute(exStyle);
 
     			const imageData = toImg(tensor, 1);
 
-    			this.onUpdate?.(imageData, i);
+    			this.onUpdate?.(imageData, positionInfo);
     		});
     	}
     }
@@ -81515,7 +81521,7 @@ return a / b;`;
     	return child_ctx;
     }
 
-    function get_each_context_1$2(ctx, list, i) {
+    function get_each_context_1$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[17] = list[i];
     	child_ctx[18] = list;
@@ -81524,7 +81530,7 @@ return a / b;`;
     }
 
     // (94:8) {#each [0, 1, 2] as y}
-    function create_each_block_1$2(ctx) {
+    function create_each_block_1$3(ctx) {
     	let canvas_1;
     	let x = /*x*/ ctx[14];
     	let y = /*y*/ ctx[17];
@@ -81584,7 +81590,7 @@ return a / b;`;
     	let each_blocks = [];
 
     	for (let i = 0; i < 3; i += 1) {
-    		each_blocks[i] = create_each_block_1$2(get_each_context_1$2(ctx, each_value_1, i));
+    		each_blocks[i] = create_each_block_1$3(get_each_context_1$3(ctx, each_value_1, i));
     	}
 
     	return {
@@ -81608,12 +81614,12 @@ return a / b;`;
     				let i;
 
     				for (i = 0; i < 3; i += 1) {
-    					const child_ctx = get_each_context_1$2(ctx, each_value_1, i);
+    					const child_ctx = get_each_context_1$3(ctx, each_value_1, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block_1$2(child_ctx);
+    						each_blocks[i] = create_each_block_1$3(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
     					}
@@ -81810,7 +81816,7 @@ return a / b;`;
     	return child_ctx;
     }
 
-    function get_each_context_1$1(ctx, list, i) {
+    function get_each_context_1$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[21] = list[i];
     	return child_ctx;
@@ -81906,7 +81912,7 @@ return a / b;`;
     	let each_blocks = [];
 
     	for (let i = 0; i < 5; i += 1) {
-    		each_blocks[i] = create_each_block_1$1(get_each_context_1$1(ctx, each_value_1, i));
+    		each_blocks[i] = create_each_block_1$2(get_each_context_1$2(ctx, each_value_1, i));
     	}
 
     	return {
@@ -81930,12 +81936,12 @@ return a / b;`;
     				let i;
 
     				for (i = 0; i < 5; i += 1) {
-    					const child_ctx = get_each_context_1$1(ctx, each_value_1, i);
+    					const child_ctx = get_each_context_1$2(ctx, each_value_1, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block_1$1(child_ctx);
+    						each_blocks[i] = create_each_block_1$2(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
     					}
@@ -81954,7 +81960,7 @@ return a / b;`;
     }
 
     // (84:4) {#each [0,1,3,4,5] as value}
-    function create_each_block_1$1(ctx) {
+    function create_each_block_1$2(ctx) {
     	let label;
     	let input;
     	let input_value_value;
@@ -82681,7 +82687,7 @@ return a / b;`;
     /* src/views/Workspace.svelte generated by Svelte v3.46.4 */
 
     function add_css$3(target) {
-    	append_styles(target, "svelte-12xb8v6", ".border.svelte-12xb8v6{border:1px solid #ff9b28;outline:none;margin:5px}.holders.svelte-12xb8v6{display:flex;flex-wrap:wrap;justify-content:center}.workarea.svelte-12xb8v6{display:grid;grid-gap:1rem;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr))}.holder-with-content.svelte-12xb8v6{display:grid;grid-template-rows:auto 1fr}.outer.svelte-12xb8v6{height:100%;display:grid;grid-template:auto 1fr auto / auto 1fr auto}header.svelte-12xb8v6{padding:2rem;grid-column:1 / 4;color:#ff9b28}.right-side.svelte-12xb8v6{grid-column:3 / 4;height:100%;overflow-y:auto}main.svelte-12xb8v6{grid-column:2 / 3;overflow-y:auto}footer.svelte-12xb8v6{grid-column:1 / 4;display:grid;grid-gap:1rem;grid-template-columns:auto 1fr auto;max-height:72px}.footer-right.svelte-12xb8v6{grid-column:3 / 3}.footer-center.svelte-12xb8v6{grid-column:2 / 2;overflow:auto}.footer-left.svelte-12xb8v6{grid-column:1 / 1}");
+    	append_styles(target, "svelte-1nkv765", ".border.svelte-1nkv765{border:1px solid #ff9b28;outline:none;margin:5px}.holders.svelte-1nkv765{display:flex;flex-wrap:wrap;justify-content:center}.workarea.svelte-1nkv765{display:grid;grid-gap:1rem;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr))}.component-frame.svelte-1nkv765{max-width:100%;overflow:scroll}.holder-with-content.svelte-1nkv765{display:grid;grid-template-rows:auto 1fr}.outer.svelte-1nkv765{height:100%;display:grid;grid-template:auto 1fr auto / auto 1fr auto}header.svelte-1nkv765{padding:2rem;grid-column:1 / 4;color:#ff9b28}.right-side.svelte-1nkv765{grid-column:3 / 4;height:100%;overflow-y:auto}main.svelte-1nkv765{grid-column:2 / 3;overflow-y:auto}footer.svelte-1nkv765{grid-column:1 / 4;display:grid;grid-gap:1rem;grid-template-columns:auto 1fr auto;max-height:72px}.footer-right.svelte-1nkv765{grid-column:3 / 3}.footer-center.svelte-1nkv765{grid-column:2 / 2;overflow:auto}.footer-left.svelte-1nkv765{grid-column:1 / 1}");
     }
 
     const get_footer_right_slot_changes = dirty => ({});
@@ -82700,7 +82706,7 @@ return a / b;`;
     const get_right_side_slot_changes = dirty => ({});
     const get_right_side_slot_context = ctx => ({});
 
-    function get_each_context_1(ctx, list, i) {
+    function get_each_context_1$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[7] = list[i];
     	child_ctx[10] = list;
@@ -82709,7 +82715,7 @@ return a / b;`;
     }
 
     // (33:3) {#each elements.filter((element) => element.expanded) as element (element.name)}
-    function create_each_block_1(key_1, ctx) {
+    function create_each_block_1$1(key_1, ctx) {
     	let div1;
     	let holder;
     	let updating_expanded;
@@ -82762,7 +82768,8 @@ return a / b;`;
     			div0 = element("div");
     			if (switch_instance) create_component(switch_instance.$$.fragment);
     			t1 = space();
-    			attr(div1, "class", "border holder-with-content svelte-12xb8v6");
+    			attr(div0, "class", "component-frame svelte-1nkv765");
+    			attr(div1, "class", "border holder-with-content svelte-1nkv765");
     			this.first = div1;
     		},
     		m(target, anchor) {
@@ -82896,7 +82903,7 @@ return a / b;`;
     			t0 = space();
     			div0 = element("div");
     			t1 = space();
-    			attr(div1, "class", "border svelte-12xb8v6");
+    			attr(div1, "class", "border svelte-1nkv765");
     			this.first = div1;
     		},
     		m(target, anchor) {
@@ -82982,9 +82989,9 @@ return a / b;`;
     	const get_key = ctx => /*element*/ ctx[7].name;
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
-    		let child_ctx = get_each_context_1(ctx, each_value_1, i);
+    		let child_ctx = get_each_context_1$1(ctx, each_value_1, i);
     		let key = get_key(child_ctx);
-    		each0_lookup.set(key, each_blocks_1[i] = create_each_block_1(key, child_ctx));
+    		each0_lookup.set(key, each_blocks_1[i] = create_each_block_1$1(key, child_ctx));
     	}
 
     	const right_side_slot_template = /*#slots*/ ctx[4]["right-side"];
@@ -83033,15 +83040,15 @@ return a / b;`;
     			t5 = space();
     			div4 = element("div");
     			if (footer_right_slot) footer_right_slot.c();
-    			attr(header, "class", "svelte-12xb8v6");
-    			attr(div0, "class", "workarea svelte-12xb8v6");
-    			attr(main, "class", "svelte-12xb8v6");
-    			attr(div1, "class", "right-side svelte-12xb8v6");
-    			attr(div2, "class", "footer-left svelte-12xb8v6");
-    			attr(div3, "class", "holders footer-center svelte-12xb8v6");
-    			attr(div4, "class", "footer-right svelte-12xb8v6");
-    			attr(footer, "class", "svelte-12xb8v6");
-    			attr(div5, "class", "outer svelte-12xb8v6");
+    			attr(header, "class", "svelte-1nkv765");
+    			attr(div0, "class", "workarea svelte-1nkv765");
+    			attr(main, "class", "svelte-1nkv765");
+    			attr(div1, "class", "right-side svelte-1nkv765");
+    			attr(div2, "class", "footer-left svelte-1nkv765");
+    			attr(div3, "class", "holders footer-center svelte-1nkv765");
+    			attr(div4, "class", "footer-right svelte-1nkv765");
+    			attr(footer, "class", "svelte-1nkv765");
+    			attr(div5, "class", "outer svelte-1nkv765");
     		},
     		m(target, anchor) {
     			insert(target, div5, anchor);
@@ -83090,7 +83097,7 @@ return a / b;`;
     				each_value_1 = /*elements*/ ctx[0].filter(func);
     				group_outros();
     				for (let i = 0; i < each_blocks_1.length; i += 1) each_blocks_1[i].r();
-    				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_1, each0_lookup, div0, fix_and_outro_and_destroy_block, create_each_block_1, null, get_each_context_1);
+    				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_1, each0_lookup, div0, fix_and_outro_and_destroy_block, create_each_block_1$1, null, get_each_context_1$1);
     				for (let i = 0; i < each_blocks_1.length; i += 1) each_blocks_1[i].a();
     				check_outros();
     			}
@@ -83266,35 +83273,41 @@ return a / b;`;
     /* src/views/exploration/Interpolation.svelte generated by Svelte v3.46.4 */
 
     function add_css$2(target) {
-    	append_styles(target, "svelte-1omnnp", ".outer.svelte-1omnnp{display:grid;height:100%;place-items:center}.box.svelte-1omnnp{display:flex;flex-wrap:wrap;justify-content:center}");
+    	append_styles(target, "svelte-1yohxqu", ".toolbar.svelte-1yohxqu{display:flex;flex-direction:row-reverse}.outer.svelte-1yohxqu{display:block;height:100%;width:100%}.inner.svelte-1yohxqu{display:grid;place-items:center}.box.svelte-1yohxqu{display:flex;flex-direction:column;flex-wrap:nowrap}.box2.svelte-1yohxqu{display:flex;flex-direction:row;flex-wrap:nowrap}");
     }
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[12] = list[i];
-    	child_ctx[13] = list;
-    	child_ctx[14] = i;
+    	child_ctx[15] = list[i];
+    	child_ctx[16] = list;
+    	child_ctx[17] = i;
     	return child_ctx;
     }
 
-    // (70:2) {#each positions as i}
-    function create_each_block(ctx) {
+    function get_each_context_1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[18] = list[i];
+    	child_ctx[19] = list;
+    	child_ctx[20] = i;
+    	return child_ctx;
+    }
+
+    // (104:3) {#each xs as x}
+    function create_each_block_1(ctx) {
     	let canvas_1;
-    	let canvas_1_id_value;
-    	let canvas_1_width_value;
-    	let canvas_1_height_value;
-    	let i = /*i*/ ctx[12];
+    	let x = /*x*/ ctx[18];
+    	let y = /*y*/ ctx[15];
     	let mounted;
     	let dispose;
-    	const assign_canvas_1 = () => /*canvas_1_binding*/ ctx[7](canvas_1, i);
-    	const unassign_canvas_1 = () => /*canvas_1_binding*/ ctx[7](null, i);
+    	const assign_canvas_1 = () => /*canvas_1_binding*/ ctx[10](canvas_1, x, y);
+    	const unassign_canvas_1 = () => /*canvas_1_binding*/ ctx[10](null, x, y);
 
     	return {
     		c() {
     			canvas_1 = element("canvas");
-    			attr(canvas_1, "id", canvas_1_id_value = `interpolation-canvas-${/*i*/ ctx[12]}`);
-    			attr(canvas_1, "width", canvas_1_width_value = 1 * 64);
-    			attr(canvas_1, "height", canvas_1_height_value = 1 * 64);
+    			attr(canvas_1, "id", `interpolation-canvas-${/*x*/ ctx[18]}-${/*y*/ ctx[15]}`);
+    			attr(canvas_1, "width", 1 * 64);
+    			attr(canvas_1, "height", 1 * 64);
     			attr(canvas_1, "draggable", "true");
     			attr(canvas_1, "ondragover", "return false");
     		},
@@ -83304,9 +83317,9 @@ return a / b;`;
 
     			if (!mounted) {
     				dispose = [
-    					listen(canvas_1, "dragstart", /*handleDragStart*/ ctx[2].bind(null, /*i*/ ctx[12])),
-    					listen(canvas_1, "dragend", /*handleDragEnd*/ ctx[3]),
-    					listen(canvas_1, "drop", /*handleDrop*/ ctx[4].bind(null, /*i*/ ctx[12]))
+    					listen(canvas_1, "dragstart", /*handleDragStart*/ ctx[4].bind(null, /*x*/ ctx[18], /*y*/ ctx[15])),
+    					listen(canvas_1, "dragend", /*handleDragEnd*/ ctx[5]),
+    					listen(canvas_1, "drop", /*handleDrop*/ ctx[6].bind(null, /*x*/ ctx[18], /*y*/ ctx[15]))
     				];
 
     				mounted = true;
@@ -83315,9 +83328,10 @@ return a / b;`;
     		p(new_ctx, dirty) {
     			ctx = new_ctx;
 
-    			if (i !== /*i*/ ctx[12]) {
+    			if (x !== /*x*/ ctx[18] || y !== /*y*/ ctx[15]) {
     				unassign_canvas_1();
-    				i = /*i*/ ctx[12];
+    				x = /*x*/ ctx[18];
+    				y = /*y*/ ctx[15];
     				assign_canvas_1();
     			}
     		},
@@ -83330,10 +83344,78 @@ return a / b;`;
     	};
     }
 
+    // (102:2) {#each ys as y}
+    function create_each_block(ctx) {
+    	let div;
+    	let t;
+    	let each_value_1 = /*xs*/ ctx[1];
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
+    	}
+
+    	return {
+    		c() {
+    			div = element("div");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			t = space();
+    			attr(div, "class", "box2 svelte-1yohxqu");
+    		},
+    		m(target, anchor) {
+    			insert(target, div, anchor);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(div, null);
+    			}
+
+    			append(div, t);
+    		},
+    		p(ctx, dirty) {
+    			if (dirty & /*xs, ys, canvas, handleDragStart, handleDragEnd, handleDrop*/ 119) {
+    				each_value_1 = /*xs*/ ctx[1];
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(div, t);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+    		},
+    		d(detaching) {
+    			if (detaching) detach(div);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+    }
+
     function create_fragment$3(ctx) {
-    	let div1;
+    	let div3;
     	let div0;
-    	let each_value = /*positions*/ ctx[1];
+    	let button;
+    	let t1;
+    	let div2;
+    	let div1;
+    	let mounted;
+    	let dispose;
+    	let each_value = /*ys*/ ctx[2];
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -83342,27 +83424,43 @@ return a / b;`;
 
     	return {
     		c() {
-    			div1 = element("div");
+    			div3 = element("div");
     			div0 = element("div");
+    			button = element("button");
+    			button.textContent = "download";
+    			t1 = space();
+    			div2 = element("div");
+    			div1 = element("div");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			attr(div0, "class", "box svelte-1omnnp");
-    			attr(div1, "class", "outer svelte-1omnnp");
+    			attr(div0, "class", "toolbar svelte-1yohxqu");
+    			attr(div1, "class", "box svelte-1yohxqu");
+    			attr(div2, "class", "inner svelte-1yohxqu");
+    			attr(div3, "class", "outer svelte-1yohxqu");
     		},
     		m(target, anchor) {
-    			insert(target, div1, anchor);
-    			append(div1, div0);
+    			insert(target, div3, anchor);
+    			append(div3, div0);
+    			append(div0, button);
+    			append(div3, t1);
+    			append(div3, div2);
+    			append(div2, div1);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(div0, null);
+    				each_blocks[i].m(div1, null);
+    			}
+
+    			if (!mounted) {
+    				dispose = listen(button, "click", /*click_handler*/ ctx[9]);
+    				mounted = true;
     			}
     		},
     		p(ctx, [dirty]) {
-    			if (dirty & /*positions, canvas, handleDragStart, handleDragEnd, handleDrop*/ 31) {
-    				each_value = /*positions*/ ctx[1];
+    			if (dirty & /*xs, ys, canvas, handleDragStart, handleDragEnd, handleDrop*/ 119) {
+    				each_value = /*ys*/ ctx[2];
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -83373,7 +83471,7 @@ return a / b;`;
     					} else {
     						each_blocks[i] = create_each_block(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(div0, null);
+    						each_blocks[i].m(div1, null);
     					}
     				}
 
@@ -83387,13 +83485,16 @@ return a / b;`;
     		i: noop,
     		o: noop,
     		d(detaching) {
-    			if (detaching) detach(div1);
+    			if (detaching) detach(div3);
     			destroy_each(each_blocks, detaching);
+    			mounted = false;
+    			dispose();
     		}
     	};
     }
 
-    let n = 30;
+    let n = 5;
+    let m = 5;
 
     function instance$3($$self, $$props, $$invalidate) {
     	let { exploration } = $$props;
@@ -83402,25 +83503,54 @@ return a / b;`;
     	let explorer;
 
     	let explorerPromise;
-    	let canvas = [];
-    	let positions = [];
+    	let canvas = new Array(n).fill(1).map(() => new Array(m).fill(1));
+    	let xs = [];
 
     	for (let i = 0; i < n; i++) {
-    		positions.push(i);
+    		xs.push(i);
+    	}
+
+    	let ys = [];
+
+    	for (let j = 0; j < m; j++) {
+    		ys.push(j);
     	}
 
     	function onUpdate(imageData, positionInfo) {
-    		const j = positionInfo;
-    		if (!canvas[j]) return;
-    		const ctx = canvas[j].getContext("2d");
-    		ctx.putImageData(imageData, 0, 0);
+    		if (!positionInfo) {
+    			ctx.putImageData(imageData, 0, 0);
+    			return;
+    		}
+
+    		positionInfo.forEach(([x, y], i) => {
+    			if (!canvas[x] || !canvas[x][y]) return;
+    			const ctx = canvas[x][y].getContext('2d');
+    			ctx.putImageData(imageData, 0 * 64 - i * 64, 0 * 64, i * 64, 0, 64, 64);
+    		});
     	}
 
-    	function handleDragStart(i, e) {
+    	function download() {
+    		const target = document.createElement('canvas');
+    		target.width = n * 64;
+    		target.height = m * 64;
+    		const ctx = target.getContext('2d');
+
+    		for (let x = 0; x < n; x++) {
+    			for (let y = 0; y < m; y++) {
+    				const sourceCtx = canvas[x][y].getContext('2d');
+    				const imageData = sourceCtx.getImageData(0, 0, 64, 64);
+    				ctx.putImageData(imageData, x * 64, y * 64);
+    			}
+    		}
+
+    		target.toBlob(blob => saveAs(blob, "icon-interpolation.png"));
+    	}
+
+    	function handleDragStart(x, y, e) {
     		e.dataTransfer.dropEffect = "move";
     		e.dataTransfer.setData("text", "dragging...");
-    		dragged.valuePromise = explorer.transferLatent(i);
-    		dragged.imageData = canvas[i].getContext("2d").getImageData(0, 0, 64, 64);
+    		dragged.valuePromise = explorer.transferLatent(x, y);
+    		dragged.imageData = canvas[x][y].getContext("2d").getImageData(0, 0, 64, 64);
     		dragged.isTransfer = true;
     	}
 
@@ -83428,16 +83558,16 @@ return a / b;`;
     		dragged.clear();
     	}
 
-    	async function handleDrop(i, e) {
+    	async function handleDrop(x, y, e) {
     		const { valuePromise, imageData, isTransfer } = dragged;
     		const v = await valuePromise;
-    		if (isTransfer) explorer.setLatentTransfer(i, v); else explorer.setLatent(i, v);
+    		if (isTransfer) explorer.setLatentTransfer(x, y, v); else explorer.setLatent(x, y, v);
     	}
 
     	async function init() {
-    		explorerPromise = exploration.createInterpolationExplorer({ n });
-    		$$invalidate(6, explorer = await explorerPromise);
-    		$$invalidate(6, explorer.onUpdate = proxy(onUpdate), explorer);
+    		explorerPromise = exploration.createInterpolationExplorer({ n, m });
+    		$$invalidate(8, explorer = await explorerPromise);
+    		$$invalidate(8, explorer.onUpdate = proxy(onUpdate), explorer);
     		window.interpolationExplorer = explorer;
     		explorer.update();
     	}
@@ -83447,19 +83577,21 @@ return a / b;`;
     		explorer && explorer.release();
     	});
 
-    	function canvas_1_binding($$value, i) {
+    	const click_handler = () => download();
+
+    	function canvas_1_binding($$value, x, y) {
     		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
-    			canvas[i] = $$value;
+    			canvas[x][y] = $$value;
     			$$invalidate(0, canvas);
     		});
     	}
 
     	$$self.$$set = $$props => {
-    		if ('exploration' in $$props) $$invalidate(5, exploration = $$props.exploration);
+    		if ('exploration' in $$props) $$invalidate(7, exploration = $$props.exploration);
     	};
 
     	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*explorer, exploration*/ 96) {
+    		if ($$self.$$.dirty & /*explorer, exploration*/ 384) {
     			if (!explorer && exploration) {
     				init();
     			}
@@ -83468,12 +83600,15 @@ return a / b;`;
 
     	return [
     		canvas,
-    		positions,
+    		xs,
+    		ys,
+    		download,
     		handleDragStart,
     		handleDragEnd,
     		handleDrop,
     		exploration,
     		explorer,
+    		click_handler,
     		canvas_1_binding
     	];
     }
@@ -83481,7 +83616,7 @@ return a / b;`;
     class Interpolation extends SvelteComponent {
     	constructor(options) {
     		super();
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, { exploration: 5 }, add_css$2);
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, { exploration: 7 }, add_css$2);
     	}
     }
 
