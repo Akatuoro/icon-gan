@@ -171,17 +171,16 @@ export class BatchGenerator2D extends BatchGenerator {
         if (i > 1) return {done: true, value: undefined}
         this.i++
 
+        const maxX = this.w - 1
+        const maxY = this.h - 1
+
         if (i === 0) {
-            const maxX = this.w - 1
-            const maxY = this.h - 1
             return {
                 done: false,
                 value: [[maxX / 2, maxY / 2], [0, 0], [0, maxY], [maxX, 0], [maxX, maxY]],
             }
         }
         else {
-            const maxX = this.w - 1
-            const maxY = this.h - 1
             const positions = []
 
             for (let x = 0; x < this.w; x++) {

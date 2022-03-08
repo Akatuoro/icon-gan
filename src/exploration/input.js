@@ -210,6 +210,16 @@ export class Style extends Array {
         return this.map(t => t.arraySync())
     }
 
+    clone() {
+        return new this.constructor(this.defs, this.map(t => t.clone()))
+    }
+
+    static from(style) {
+        return style instanceof Style?
+            style.clone() :
+            Style.fromData(style)
+    }
+
     static fromData(data) {
         return new this(data.defs, data.map(d => tf.tensor(d)))
     }

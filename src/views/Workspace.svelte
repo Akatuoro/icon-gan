@@ -41,7 +41,7 @@
 						name={element.name}
 						bind:expanded={element.expanded}
 					/>
-					<div>
+					<div class="component-frame">
 						<svelte:component this={element.component} {...element.props} />
 					</div>
 				</div>
@@ -94,6 +94,11 @@
 		display: grid;
 		grid-gap: 1rem;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	}
+
+	.component-frame {
+		max-width: 100%;
+		overflow: scroll;
 	}
 
 	.holder-with-content {
