@@ -39,6 +39,21 @@
             margin-top: 86px;
         }
 
+        button {
+            border: 1px solid #ff9b28;
+            background-color: #051A33;
+            color: #ff9b28;
+            cursor: pointer;
+            background: transparent;
+            outline: none;
+            transition: 1s ease-in-out;
+        }
+
+        button:hover {
+            transition: 1s ease-in-out;
+            background: #ff9b2821;
+        }
+
         .container {
             height: 100%;
             display: flex;
@@ -65,11 +80,6 @@
         .btn {
             width: 180px;
             height: 60px;
-            cursor: pointer;
-            background: transparent;
-            border: 1px solid #ff9b28;
-            outline: none;
-            transition: 1s ease-in-out;
         }
 
         svg {
@@ -83,17 +93,11 @@
             transition: 1s ease-in-out;
         }
 
-        .btn:hover {
-            transition: 1s ease-in-out;
-            background: #ff9b2821;
-        }
-
         .btn:hover svg {
             stroke-dashoffset: -480;
         }
 
         .btn span {
-            color: #ff9b28;
             font-size: 18px;
             font-weight: 100;
         }
@@ -126,6 +130,7 @@
 
         a {
             color: #ff9b28;
+            cursor: pointer;
             text-decoration: none;
         }
 
@@ -238,6 +243,14 @@
             background: #ff9b28;
         }
 
+
+
+        dialog {
+            border: 1px solid #ff9b28;
+            background-color: #051A33;
+            color: #ff9b28;
+        }
+
     </style>
 
     <script>
@@ -297,6 +310,19 @@
 
             document.getElementById('support').hidden = false
         }
+
+        function dialogCloseHandler(e) {
+            const target = e.target || e.srcElement
+            if (target.tagName !== 'DIALOG') return
+            const rect = target.getBoundingClientRect()
+            const inside =
+                rect.top <= e.clientY &&
+                rect.bottom >= e.clientY &&
+                rect.left <= e.clientX &&
+                rect.right >= e.clientX
+
+            if (!inside) target.close()
+        }
     </script>
 </head>
 <body onload="onload()">
@@ -330,7 +356,7 @@
 
                 <div class="footer">
                     <div style="text-align: left;"><a href="https://github.com/Akatuoro/icon-gan">GitHub</a></div>
-                    <div style="text-align: center;">About</div>
+                    <div style="text-align: center;"><a onclick="document.getElementById('aboutDialog').showModal()">About</a></div>
                     <div style="text-align: right;">License: CC-BY-NC</div>
                 </div>
             </div>
@@ -341,4 +367,9 @@
             <div class="lds-grid"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
     </div>
+    <dialog id="aboutDialog" onclick="dialogCloseHandler(event)">
+        <menu>
+            <button onclick="document.getElementById('aboutDialog').close()">Close</button>
+        </menu>
+    </dialog>
 </body>

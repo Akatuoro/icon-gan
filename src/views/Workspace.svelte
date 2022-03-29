@@ -26,7 +26,7 @@
 </script>
 
 <div class="outer">
-	<header>ICON GAN</header>
+	<header><a href="/">ICON GAN</a></header>
 
 	<main>
 		<div class="workarea">
@@ -114,6 +114,9 @@
 	header {
 		padding: 2rem;
 		grid-column: 1 / 4;
+		color: #ff9b28;
+	}
+	header a:visited {
 		color: #ff9b28;
 	}
 	.right-side {
