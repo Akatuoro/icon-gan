@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "async": "^2.6.1",
+    "async": "^3.2.2",
     "csv2": "^0.1.1",
     "express": "^4.16.3",
     "request": "^2.88.0",
