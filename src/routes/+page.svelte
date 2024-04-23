@@ -1,4 +1,25 @@
+<script>
+    import BrowserSupport from "../lib/browser-support.svelte";
 
+    function load() {
+        const overlay = document.getElementById("overlay")
+        overlay.hidden = false
+        location.href = '/model'
+    }
+
+    function dialogCloseHandler(e) {
+        const target = e.target || e.srcElement
+        if (target.tagName !== 'DIALOG') return
+        const rect = target.getBoundingClientRect()
+        const inside =
+            rect.top <= e.clientY &&
+            rect.bottom >= e.clientY &&
+            rect.left <= e.clientX &&
+            rect.right >= e.clientX
+
+        if (!inside) target.close()
+    }
+</script>
 
 <div id="home">
     <div class="container">
@@ -7,18 +28,14 @@
                 <div style="text-align: left;"><noscript>Enable JavaScript!</noscript></div>
                 <div></div>
                 <div style="text-align: right;">
-                    <div id="support" hidden style="color: gray; animation: fadein 0.5s;">
-                        <span id="webgl">WebGL</span>
-                        <span id="plus"> + </span>
-                        <span id="worker">Worker</span>
-                    </div>
+                    <BrowserSupport />
                 </div>
             </div>
 
             <h1>Icon GAN</h1>
             <div class="flex-center btn-container">
                 <div style="position: absolute;">
-                    <button class="btn" onclick="load()">
+                    <button class="btn" on:click={load}>
                         <svg width="180px" height="60px" viewBox="0 0 180 60" class="border">
                             <polyline points="179,1 179,59 1,59 1,1 179,1" class="bg-line" />
                             <polyline points="179,1 179,59 1,59 1,1 179,1" class="hl-line" />
@@ -41,7 +58,9 @@
         <div class="lds-grid"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
     </div>
 </div>
-<dialog id="aboutDialog" onclick="dialogCloseHandler(event)">
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+<dialog id="aboutDialog" on:click={dialogCloseHandler}>
     <p>Icon GAN is a <a href="https://en.wikipedia.org/wiki/Generative_adversarial_network">generative adversarial network</a> for interactively generating favicons.</p>
     <p>
         Usually designers work together with clients to iterate on icon designs, presenting drafts and iterating on the final design.

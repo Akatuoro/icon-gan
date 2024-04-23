@@ -7,8 +7,8 @@
 	<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 	%sveltekit.head%
 
-    <title></title>
-    
+    <title>Icon GAN</title>
+
     <style>
         html,
         body {
@@ -258,80 +258,8 @@
         }
 
     </style>
-
-    <script>
-        function load() {
-            const overlay = document.getElementById("overlay")
-            overlay.hidden = false
-            location.href = '/model'
-        }
-
-        function reset() {
-            const overlay = document.getElementById("overlay")
-            overlay.hidden = true
-            location.hash = ''
-        }
-
-        let support
-
-        /** Checks support for worker, webgl and offscreen canvas */
-        function checkSupport() {
-            if (support) return support
-
-            const canvas = document.createElement('canvas')
-            const gl = canvas.getContext('webgl') ||
-                canvas.getContext('experimental-webgl')
-
-            support = {
-                worker: !!window.Worker,
-                webgl: gl && gl instanceof WebGLRenderingContext,
-                offscreen: !!window.OffscreenCanvas
-            }
-            return support
-        }
-
-        function onload() {
-            if (location.hash !== '') {
-                const overlay = document.getElementById("overlay")
-                overlay.hidden = false
-            }
-
-            const supported = checkSupport()
-
-            const setColor = id => {
-                document.getElementById(id).style.color = '#ff9b28'
-            }
-
-            if (supported.webgl) {
-                setColor('webgl')
-
-                if (supported.worker && supported.offscreen) {
-                    setColor('plus')
-                    setColor('worker')
-                }
-            }
-            else if (supported.worker) {
-                setColor('worker')
-            }
-
-            document.getElementById('support').hidden = false
-        }
-
-        function dialogCloseHandler(e) {
-            const target = e.target || e.srcElement
-            if (target.tagName !== 'DIALOG') return
-            const rect = target.getBoundingClientRect()
-            const inside =
-                rect.top <= e.clientY &&
-                rect.bottom >= e.clientY &&
-                rect.left <= e.clientX &&
-                rect.right >= e.clientX
-
-            if (!inside) target.close()
-        }
-    </script>
 </head>
-<body onload="onload()" data-sveltekit-preload-data="hover">
+<body data-sveltekit-preload-data="hover">
     <div style="display: contents">%sveltekit.body%</div>
 </body>
 </html>

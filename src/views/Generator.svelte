@@ -47,12 +47,6 @@
 
         console.info('model loaded, update')
         exploration.update()
-
-        const home = document.getElementById('home')
-        home.hidden = true
-
-        const overlay = document.getElementById('overlay')
-        overlay.hidden = true
     })
 
     let elements = [{
