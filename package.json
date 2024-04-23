@@ -4,12 +4,11 @@
   "description": "Generate icons and logos with machine learning",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "bundle": "npm run build && mkdir -p build/dist && cp dist/* build/dist && cp index.html build/index.html",
-    "build": "rollup -c",
-    "watch": "rollup -c -w",
-    "dev": "run-p watch start",
-    "start": "serve"
+    "dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
   },
   "repository": {
     "type": "git",
@@ -27,19 +26,23 @@
     "url": "https://github.com/Akatuoro/icon-gan/issues"
   },
   "homepage": "https://github.com/Akatuoro/icon-gan#readme",
+  "type": "module",
   "dependencies": {
-    "@tensorflow/tfjs": "^2.0.1",
+    "@tensorflow/tfjs": "^4.18.0",
     "npm-run-all": "^4.1.5",
-    "rollup-plugin-svelte": "^6.1.1",
-    "svelte": "^3.29.6"
+    "rollup-plugin-svelte": "^7.2.0",
+    "svelte": "^4.2.15"
   },
-  "devDependencies": {
-    "@rollup/plugin-commonjs": "^14.0.0",
-    "@rollup/plugin-node-resolve": "^8.4.0",
-    "comlink": "^4.3.0",
-    "file-saver": "^2.0.2",
-    "rollup": "^2.22.2",
-    "rollup-plugin-terser": "^6.1.0",
-    "serve": "^11.3.2"
-  }
+	"devDependencies": {
+		"@tensorflow/tfjs": "^4.18.0",
+		"comlink": "^4.4.1",
+		"file-saver": "^2.0.5",
+		"@sveltejs/adapter-auto": "^3.0.0",
+		"@sveltejs/kit": "^2.0.0",
+		"@sveltejs/vite-plugin-svelte": "^3.0.0",
+		"svelte": "^4.2.7",
+		"svelte-check": "^3.6.0",
+		"typescript": "^5.0.0",
+		"vite": "^5.0.3"
+	}
 }

@@ -10,7 +10,7 @@ const n = 9
 
 let slots = new Array(n)
 
-window.slots = slots
+// window.slots = slots
 
 function handleDragStart(i, e) {
     e.dataTransfer.dropEffect = "move";

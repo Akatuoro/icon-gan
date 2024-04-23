@@ -1,6 +1,7 @@
 import { Exploration } from './exploration';
+import workerURL from './worker?url';
 import * as Comlink from 'comlink'
-window.Comlink = Comlink
+// window.Comlink = Comlink
 
 
 let _useWorker
@@ -25,7 +26,7 @@ export const useWorker = () => {
 export const explore = async () => {
     if (useWorker()) {
         console.info('using worker')
-        const exploration = Comlink.wrap(new Worker('dist/exploration-worker.js'))
+        const exploration = Comlink.wrap(new Worker(workerURL, {type: 'module'}))
         return exploration
     }
     else {

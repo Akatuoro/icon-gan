@@ -2,7 +2,7 @@
     import { writable } from 'svelte/store'
     import {onMount} from 'svelte'
     import {explore} from '../exploration'
-    import { saveAs } from 'file-saver';
+    import fileSaver from 'file-saver';
     import Plane from './exploration/Plane.svelte';
     import Direction from './exploration/Direction.svelte';
     import Palette from './Palette.svelte';
@@ -10,6 +10,7 @@
     import Workspace from './Workspace.svelte';
     import Interpolation from './exploration/Interpolation.svelte';
     import GlobalSettings from './exploration/GlobalSettings.svelte';
+    const { saveAs } = fileSaver;
 
     let exploration
 
@@ -86,7 +87,7 @@
         <Palette {exploration} />
     </div>
 
-    <div slot="footer-right" class="download-drop"
+    <div role="region" slot="footer-right" class="download-drop"
         on:drop={handleDownloadDrop}
         ondragover="return false">
     </div>
