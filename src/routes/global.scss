@@ -1,0 +1,19 @@
+/* global.scss */
+
+$primary: #ff9b28;  // Change to your desired color
+// $secondary:     $gray-100;
+// $success:       $green;
+// $info:          $cyan;
+// $warning:       $yellow;
+// $danger:        $red;
+// $light:         $gray-100;
+// $dark:          $gray-900;
+
+$body-bg: #051A33;
+$body-emphasis-color: #ff9b28;
+$border-color: #ff9b28;
+
+$btn-hover-bg-tint-amount: 10%;
+$btn-hover-bg-shade-amount: 10%;
+
+@import "../../node_modules/bootstrap/scss/bootstrap";

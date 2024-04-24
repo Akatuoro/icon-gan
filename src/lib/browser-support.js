@@ -1,8 +1,10 @@
 import { readable } from "svelte/store";
+import { browser } from '$app/environment';
 
 let support;
 
 export function getBrowserSupport() {
+    if (!browser) return;
     if (support) return support;
 
     const canvas = document.createElement('canvas')

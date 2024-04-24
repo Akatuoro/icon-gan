@@ -1,3 +1,4 @@
+import { getBrowserSupport } from '$lib/browser-support';
 import { Exploration } from './exploration';
 import workerURL from './worker?url';
 import * as Comlink from 'comlink'
@@ -8,14 +9,14 @@ let _useWorker
 
 export const setWorkerUsage = (shouldUse) => {
     _useWorker = shouldUse?
-        checkSupport().worker :
+        getBrowserSupport().worker :
         false
 }
 
 export const useWorker = () => {
     // if _useWorker was not set yet, provide a sensible default
     if (_useWorker === undefined) {
-        const {webgl, worker, offscreen} = checkSupport()
+        const {webgl, worker, offscreen} = getBrowserSupport()
         _useWorker = worker && (!webgl || (webgl && offscreen))
     }
 

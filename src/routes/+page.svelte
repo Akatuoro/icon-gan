@@ -35,7 +35,7 @@
             <h1>Icon GAN</h1>
             <div class="flex-center btn-container">
                 <div style="position: absolute;">
-                    <button class="btn" on:click={load}>
+                    <button class="btn1" on:click={load}>
                         <svg width="180px" height="60px" viewBox="0 0 180 60" class="border">
                             <polyline points="179,1 179,59 1,59 1,1 179,1" class="bg-line" />
                             <polyline points="179,1 179,59 1,59 1,1 179,1" class="hl-line" />
@@ -72,3 +72,20 @@
         <button onclick="document.getElementById('aboutDialog').close()">Close</button>
     </menu>
 </dialog>
+
+
+<style>
+    
+    .container {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+    .container-content {
+        width: 448px;
+        height: 384px;
+        background-color: #051A33;
+    }
+</style>
