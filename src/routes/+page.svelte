@@ -1,5 +1,7 @@
 <script>
-    import BrowserSupport from "../lib/browser-support.svelte";
+    import LoadingGrid from "$lib/components/LoadingGrid.svelte";
+    import BrowserSupport from "$lib/browser-support.svelte";
+    import FancyButton from "$lib/components/FancyButton.svelte";
 
     function load() {
         const overlay = document.getElementById("overlay")
@@ -35,13 +37,9 @@
             <h1>Icon GAN</h1>
             <div class="flex-center btn-container">
                 <div style="position: absolute;">
-                    <button class="btn1" on:click={load}>
-                        <svg width="180px" height="60px" viewBox="0 0 180 60" class="border">
-                            <polyline points="179,1 179,59 1,59 1,1 179,1" class="bg-line" />
-                            <polyline points="179,1 179,59 1,59 1,1 179,1" class="hl-line" />
-                        </svg>
-                        <span>LOAD<br><span>(16MB)</span></span>
-                    </button>
+                    <FancyButton on:click={load} >
+                        <span>LOAD<br><span style="font-size: 12px;">(16MB)</span></span>
+                    </FancyButton>
                 </div>
             </div>
 
@@ -55,7 +53,7 @@
 </div>
 <div id="overlay" hidden="true" onclick="reset()">
     <div class="container">
-        <div class="lds-grid"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <LoadingGrid/>
     </div>
 </div>
 <!-- svelte-ignore a11y-click-events-have-key-events -->

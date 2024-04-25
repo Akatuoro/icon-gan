@@ -1,6 +1,7 @@
 <script>
     import './global.scss'
-    import { Navbar, NavbarBrand, NavbarToggler, Collapse, Nav, NavItem, NavLink } from '@sveltestrap/sveltestrap'
+    import { Navbar, NavbarBrand, NavbarToggler, Collapse, Nav, NavItem, NavLink, Container } from '@sveltestrap/sveltestrap'
+    import '../../node_modules/bootstrap-icons/font/bootstrap-icons.css'
 
     let isOpen
 </script>
@@ -21,5 +22,6 @@
     </Collapse>
 </Navbar>
 
-
-<slot></slot>
+<Container fluid>
+    <slot></slot>
+</Container>

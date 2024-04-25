@@ -10,6 +10,7 @@
     import Workspace from './Workspace.svelte';
     import Interpolation from './exploration/Interpolation.svelte';
     import GlobalSettings from './exploration/GlobalSettings.svelte';
+    import WorkspaceV2 from './WorkspaceV2.svelte';
     const { saveAs } = fileSaver;
 
     let exploration
@@ -76,8 +77,8 @@
 </script>
 
 
-<Workspace {elements} >
-    <div style="display:grid;" slot="right-side">
+<WorkspaceV2 {elements} >
+    <div style="display:flex; overflow:auto; justify-content: center;" slot="right-side">
         <Palette {exploration} />
     </div>
 
@@ -85,7 +86,7 @@
         on:drop={handleDownloadDrop}
         ondragover="return false">
     </div>
-</Workspace>
+</WorkspaceV2>
 
 <style>
     .download-drop {
