@@ -48,29 +48,31 @@
     })
 
     let elements = [{
-        name: "Plane Explorer",
+        name: "Plane",
         component: Plane,
+        active: true,
         expanded: true,
         props: { exploration, scale }
     },
     {
-        name: "Direction Explorer",
+        name: "Direction",
         component: Direction,
         expanded: false,
-        props: { exploration }
+        props: { exploration, scale }
     },
     {
-        name: "Interpolation Explorer",
+        name: "Interpolation",
         component: Interpolation,
         expanded: false,
         props: { exploration }
     },
-    {
-        name: "Global Settings",
-        component: GlobalSettings,
-        expanded: true,
-        props: { exploration, scale }
-    }]
+    // {
+    //     name: "Global Settings",
+    //     component: GlobalSettings,
+    //     expanded: true,
+    //     props: { exploration, scale }
+    // }
+    ]
 </script>
 
 

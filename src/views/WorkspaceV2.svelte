@@ -12,7 +12,7 @@
 </script>
 
 
-<TabContent>
+<TabContent tabindex={1}>
     {#each elements as element}
         <WorkspaceTab element={element} />
     {/each}

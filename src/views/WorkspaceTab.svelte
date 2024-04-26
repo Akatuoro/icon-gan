@@ -4,9 +4,11 @@
 
     export let element
 
-    const { activeTabId } = getContext('tabContent');
-    let active;
+    const { activeTabId, setActiveTab } = getContext('tabContent');
+    let active = element.active;
     $: if ($activeTabId !== undefined) active = $activeTabId === element.name;
+
+    if (element.active) setActiveTab(element.name)
 </script>
 
 <TabPane tabId={element.name} tab={element.name}>

@@ -104,8 +104,9 @@ export class PlaneExplorer extends Explorer {
     }
 
     update() {
+        this.onBusy?.(true)
         this.batchExecutor.iterable = this.batchGenerator
-        this.batchExecutor.start(this.queueStep.bind(this))
+        this.batchExecutor.start(this.queueStep.bind(this), () => this.onBusy?.(false))
     }
 
     async queueStep(positionInfo) {

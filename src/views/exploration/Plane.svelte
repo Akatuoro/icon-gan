@@ -1,7 +1,10 @@
 <script>
+    import { Card, Icon, Progress, Spinner } from "@sveltestrap/sveltestrap";
 import {proxy} from "../../exploration";
 import {dragged} from '../../state/dragged'
 import {onDestroy} from 'svelte'
+    import BusySpinner from "$lib/components/BusySpinner.svelte";
+    import ScaleSlider from "$lib/components/ScaleSlider.svelte";
 
 export let exploration
 
@@ -13,6 +16,7 @@ export let active
 let explorer
 let explorerPromise
 
+let busy = false
 
 let canvas = new Array(3).fill(1).map(() => new Array(3).fill(1))
 
@@ -62,6 +66,7 @@ async function init() {
     explorerPromise = exploration.createPlaneExplorer();
     explorer = await explorerPromise
     explorer.onUpdate = proxy(onUpdate)
+    explorer.onBusy = proxy((_busy) => busy = _busy)
     window.planeExplorer = explorer
 
     explorer.update()
@@ -90,6 +95,15 @@ $: if (!explorer && exploration && active) {
     }
 </style>
 
+<Card body outline>
+    <ScaleSlider scale={scale} ratio={10} />
+    <button style="width:100%" on:click={() => exploration.reset()}>reset</button>
+</Card>
+
+<Card body outline>
+<div style="position: absolute; top: 10px; left: 10px;">
+    <BusySpinner busy={busy || !explorer} time={100} />
+</div>
 <div class="outer">
 <div class="box">
     {#each [0, 1, 2] as x}
@@ -110,3 +124,4 @@ $: if (!explorer && exploration && active) {
     {/each}
 </div>
 </div>
+</Card>

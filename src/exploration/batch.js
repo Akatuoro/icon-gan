@@ -26,9 +26,9 @@
 export class BatchExecutor {
     /**
      * Initializes the batch executor with an iterable.
-     * @param {Iterable} iterable 
+     * @param {Iterable} iterable
      */
-    constructor(iterable) {
+    constructor(iterable, busyCb) {
         this.iterable = iterable
         this._stepTS = undefined
         this._stepCb = undefined
@@ -51,9 +51,11 @@ export class BatchExecutor {
      * Execution will continue with new iterator when `iterable` is set,
      * but only if execution is not done/stopped.
      * @param {(value: any) => void} cb callback that takes a single iterator value as argument on each iteration.
+     * @param {() => void} finalCb called once the work is done
      */
-    start(cb) {
+    start(cb, finalCb) {
         this._stepCb = cb
+        this._finalCb = finalCb
 
         if (!this._stepTS) {
             this._stepTS = setTimeout(() => this._step())
@@ -73,6 +75,7 @@ export class BatchExecutor {
 
         if (done) {
             this._stepTS = undefined
+            this._finalCb?.()
         }
         else {
             this._stepCb(value)

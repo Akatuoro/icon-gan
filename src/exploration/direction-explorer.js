@@ -76,8 +76,9 @@ export class DirectionExplorer extends Explorer {
     }
 
     update() {
+        this.onBusy?.(true)
         this.batchExecutor.iterable = this.v.map((_, i) => i);
-        this.batchExecutor.start(this.queueStep.bind(this))
+        this.batchExecutor.start(this.queueStep.bind(this), () => this.onBusy?.(false))
     }
 
     async queueStep(positionInfo) {
