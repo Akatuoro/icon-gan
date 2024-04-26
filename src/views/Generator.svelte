@@ -1,8 +1,7 @@
 <script>
     import { writable } from 'svelte/store'
     import {onMount} from 'svelte'
-    import {explore} from '../exploration'
-    import { saveAs } from 'file-saver';
+    import fileSaver from 'file-saver';
     import Plane from './exploration/Plane.svelte';
     import Direction from './exploration/Direction.svelte';
     import Palette from './Palette.svelte';
@@ -10,10 +9,13 @@
     import Workspace from './Workspace.svelte';
     import Interpolation from './exploration/Interpolation.svelte';
     import GlobalSettings from './exploration/GlobalSettings.svelte';
+    import WorkspaceV2 from './WorkspaceV2.svelte';
+    import { ExplorationManager } from '$lib/state/global';
+    const { saveAs } = fileSaver;
 
     let exploration
 
-    const scale = writable(0.5)
+    const scale = writable(25)
 
     scale.subscribe(value => {
         if (!exploration) return
@@ -34,63 +36,57 @@
     }
 
     onMount(async () => {
-        const _exploration = await explore();
-
-        console.info('loading model')
-        await _exploration.preLoad()
+        const _exploration = await ExplorationManager.explore();
 
         // updates bindings
         exploration = _exploration
         elements.forEach((element) => element.props.exploration = exploration);
         elements = [...elements];
 
+        exploration.scale = $scale
         console.info('model loaded, update')
         exploration.update()
-
-        const home = document.getElementById('home')
-        home.hidden = true
-
-        const overlay = document.getElementById('overlay')
-        overlay.hidden = true
     })
 
     let elements = [{
-        name: "Plane Explorer",
+        name: "Plane",
         component: Plane,
+        active: true,
         expanded: true,
         props: { exploration, scale }
     },
     {
-        name: "Direction Explorer",
+        name: "Direction",
         component: Direction,
         expanded: false,
-        props: { exploration }
+        props: { exploration, scale }
     },
     {
-        name: "Interpolation Explorer",
+        name: "Interpolation",
         component: Interpolation,
         expanded: false,
         props: { exploration }
     },
-    {
-        name: "Global Settings",
-        component: GlobalSettings,
-        expanded: true,
-        props: { exploration, scale }
-    }]
+    // {
+    //     name: "Global Settings",
+    //     component: GlobalSettings,
+    //     expanded: true,
+    //     props: { exploration, scale }
+    // }
+    ]
 </script>
 
 
-<Workspace {elements} >
-    <div style="display:grid;" slot="right-side">
+<WorkspaceV2 {elements} >
+    <div style="display:flex; overflow:auto; justify-content: center;" slot="right-side">
         <Palette {exploration} />
     </div>
 
-    <div slot="footer-right" class="download-drop"
+    <div role="region" slot="footer-right" class="download-drop"
         on:drop={handleDownloadDrop}
         ondragover="return false">
     </div>
-</Workspace>
+</WorkspaceV2>
 
 <style>
     .download-drop {

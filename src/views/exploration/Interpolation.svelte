@@ -1,9 +1,15 @@
 <script>
+    import { Card } from "@sveltestrap/sveltestrap";
 	import { proxy } from "../../exploration";
 	import { dragged } from "../../state/dragged";
 	import { onDestroy } from "svelte";
+    import BusySpinner from "$lib/components/BusySpinner.svelte";
 
 	export let exploration;
+
+	export let active;
+
+	let busy;
 
 	/** @type {import('../../exploration/plane-exporer.js').InterpolationExplorer} */
 	let explorer;
@@ -77,6 +83,7 @@
 		explorerPromise = exploration.createInterpolationExplorer({n, m});
 		explorer = await explorerPromise;
 		explorer.onUpdate = proxy(onUpdate);
+		explorer.onBusy = proxy((_busy) => busy = _busy)
 		window.interpolationExplorer = explorer;
 
 		explorer.update();
@@ -87,12 +94,16 @@
 		explorer && explorer.release();
 	});
 
-	$: if (!explorer && exploration) {
+	$: if (!explorer && exploration && active) {
 		init();
 	}
 </script>
 
 
+<Card body outline>
+	<div style="position: absolute; top: 10px; left: 10px;">
+		<BusySpinner busy={busy || !explorer} time={100} />
+	</div>
 <div class="outer">
 	<div class="toolbar">
 		<button on:click={() => download()}>download</button>
@@ -119,6 +130,7 @@
 	</div>
 </div>
 </div>
+</Card>
 
 <style>
 	.toolbar {

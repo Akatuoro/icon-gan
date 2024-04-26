@@ -1,4 +1,7 @@
 <script>
+    import { palette } from '$lib/state/palette';
+    import { onMount } from 'svelte';
+
 
 import {dragged} from '../state/dragged'
 
@@ -6,16 +9,12 @@ export let exploration
 
 let canvas = []
 
-const n = 9
 
-let slots = new Array(n)
-
-window.slots = slots
 
 function handleDragStart(i, e) {
     e.dataTransfer.dropEffect = "move";
-    e.dataTransfer.setData('text', JSON.stringify(slots[i]))
-    dragged.valuePromise = slots[i]
+    e.dataTransfer.setData('text', JSON.stringify($palette[i]?.value))
+    dragged.valuePromise = $palette[i]?.value
     dragged.imageData = canvas[i].getContext('2d').getImageData(0, 0, 64, 64)
     dragged.isTransfer = false
 }
@@ -28,21 +27,27 @@ async function handleDrop(i, e) {
     const {valuePromise, imageData, isTransfer} = dragged
     const v = await valuePromise
 
-    if (isTransfer) slots[i] = await exploration.resolveTransfer(v)
-    else slots[i] = v
+    const value = isTransfer? await exploration.resolveTransfer(v) : v;
+
+    $palette[i] = { value, imageData };
 
     if (imageData) {
         canvas[i].getContext('2d').putImageData(imageData, 0, 0)
     }
-
-    slots = slots
 }
 
+onMount(() => {
+    $palette.forEach((data, i) => {
+        if (data?.imageData) {
+            canvas[i].getContext('2d').putImageData(data.imageData, 0, 0);
+        }
+    })
+})
 
 </script>
 
 
-{#each slots as slot, i}
+{#each ($palette ?? []) as slot, i}
 <canvas class="border"
     bind:this={canvas[i]}
     width={64}
