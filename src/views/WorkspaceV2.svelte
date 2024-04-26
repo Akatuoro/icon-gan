@@ -2,7 +2,8 @@
 
 <script>
     import StickyFooter from "$lib/components/StickyFooter.svelte";
-    import { Button, Collapse, Icon, TabContent, TabPane } from "@sveltestrap/sveltestrap";
+    import { Button, Collapse, Icon, TabContent } from "@sveltestrap/sveltestrap";
+    import WorkspaceTab from "./WorkspaceTab.svelte";
 
 
 	export let elements;
@@ -13,9 +14,7 @@
 
 <TabContent>
     {#each elements as element}
-        <TabPane tabId={element.name} tab={element.name}>
-            <svelte:component this={element.component} {...element.props} />
-        </TabPane>
+        <WorkspaceTab element={element} />
     {/each}
 </TabContent>
 

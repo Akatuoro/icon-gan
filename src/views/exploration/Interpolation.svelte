@@ -5,6 +5,8 @@
 
 	export let exploration;
 
+	export let active;
+
 	/** @type {import('../../exploration/plane-exporer.js').InterpolationExplorer} */
 	let explorer;
 	let explorerPromise;
@@ -87,7 +89,7 @@
 		explorer && explorer.release();
 	});
 
-	$: if (!explorer && exploration) {
+	$: if (!explorer && exploration && active) {
 		init();
 	}
 </script>

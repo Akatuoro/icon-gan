@@ -1,7 +1,6 @@
 <script>
     import { writable } from 'svelte/store'
     import {onMount} from 'svelte'
-    import {explore} from '../exploration'
     import fileSaver from 'file-saver';
     import Plane from './exploration/Plane.svelte';
     import Direction from './exploration/Direction.svelte';
@@ -11,6 +10,7 @@
     import Interpolation from './exploration/Interpolation.svelte';
     import GlobalSettings from './exploration/GlobalSettings.svelte';
     import WorkspaceV2 from './WorkspaceV2.svelte';
+    import { ExplorationManager } from '$lib/state/global';
     const { saveAs } = fileSaver;
 
     let exploration
@@ -36,10 +36,7 @@
     }
 
     onMount(async () => {
-        const _exploration = await explore();
-
-        console.info('loading model')
-        await _exploration.preLoad()
+        const _exploration = await ExplorationManager.explore();
 
         // updates bindings
         exploration = _exploration

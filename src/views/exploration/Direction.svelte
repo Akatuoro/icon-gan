@@ -5,6 +5,8 @@ import {onDestroy} from 'svelte'
 
 export let exploration
 
+export let active
+
 let explorer
 
 let selected = 0
@@ -55,7 +57,7 @@ function reset() {
     explorer.update()
 }
 
-$: if (!explorer && exploration) {
+$: if (!explorer && exploration && active) {
     init()
 }
 

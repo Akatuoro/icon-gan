@@ -23,7 +23,10 @@ export const useWorker = () => {
     return _useWorker
 }
 
-
+/**
+ * 
+ * @returns {Promise<Exploration | Comlink.Remote<Exploration>>}
+ */
 export const explore = async () => {
     if (useWorker()) {
         console.info('using worker')

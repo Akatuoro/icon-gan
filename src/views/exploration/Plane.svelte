@@ -7,6 +7,8 @@ export let exploration
 
 export let scale
 
+export let active
+
 /** @type {import('../../exploration/plane-exporer.js').PlaneExplorer} */
 let explorer
 let explorerPromise
@@ -70,7 +72,7 @@ onDestroy(async () => {
     explorer && explorer.release()
 })
 
-$: if (!explorer && exploration) {
+$: if (!explorer && exploration && active) {
     init()
 }
 
