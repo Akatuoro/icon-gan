@@ -2,6 +2,7 @@
     import LoadingGrid from "$lib/components/LoadingGrid.svelte";
     import BrowserSupport from "$lib/browser-support.svelte";
     import FancyButton from "$lib/components/FancyButton.svelte";
+    import StickyFooter from "$lib/components/StickyFooter.svelte";
 
     function load() {
         const overlay = document.getElementById("overlay")
@@ -9,81 +10,58 @@
         location.href = '/model'
     }
 
-    function dialogCloseHandler(e) {
-        const target = e.target || e.srcElement
-        if (target.tagName !== 'DIALOG') return
-        const rect = target.getBoundingClientRect()
-        const inside =
-            rect.top <= e.clientY &&
-            rect.bottom >= e.clientY &&
-            rect.left <= e.clientX &&
-            rect.right >= e.clientX
-
-        if (!inside) target.close()
-    }
 </script>
 
 <div id="home">
-    <div class="container">
-        <div class="container-content" style="position: absolute;">
-            <div class="header">
-                <div style="text-align: left;"><noscript>Enable JavaScript!</noscript></div>
-                <div></div>
-                <div style="text-align: right;">
-                    <BrowserSupport />
-                </div>
-            </div>
+    <div class="main-container">
 
-            <h1>Icon GAN</h1>
-            <div class="flex-center btn-container">
-                <div style="position: absolute;">
-                    <FancyButton on:click={load} >
-                        <span>LOAD<br><span style="font-size: 12px;">(16MB)</span></span>
-                    </FancyButton>
-                </div>
-            </div>
-
-            <div class="footer">
-                <div style="text-align: left;"><a href="https://github.com/Akatuoro/icon-gan">GitHub</a></div>
-                <div style="text-align: center;"><a onclick="document.getElementById('aboutDialog').showModal()">About</a></div>
-                <div style="text-align: right;">License: CC-BY-NC</div>
-            </div>
-        </div>
+        <h1 style="margin-bottom: 5rem;">Icon GAN</h1>
+        <FancyButton on:click={load} >
+            <span>LOAD<br><span style="font-size: 12px;">(16MB)</span></span>
+        </FancyButton>
     </div>
 </div>
+
+<StickyFooter>
+    <div>
+        <div style="float: left;">
+            <BrowserSupport />
+        </div>
+        <div style="float: right;">
+            License: CC-BY-NC
+        </div>
+    </div>
+</StickyFooter>
+
 <div id="overlay" hidden="true" onclick="reset()">
     <div class="container">
         <LoadingGrid/>
     </div>
 </div>
-<!-- svelte-ignore a11y-click-events-have-key-events -->
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-<dialog id="aboutDialog" on:click={dialogCloseHandler}>
-    <p>Icon GAN is a <a href="https://en.wikipedia.org/wiki/Generative_adversarial_network">generative adversarial network</a> for interactively generating favicons.</p>
-    <p>
-        Usually designers work together with clients to iterate on icon designs, presenting drafts and iterating on the final design.
-        This icon generator can help provide inspiration to the artist and client or serve as base for the iterative process.
-    </p>
-    <p>The interface facilitates exploring the latent space of the trained model. It features exploring a 2d subspace and selectively choosing directions - representing style and form -, interpolating between 2 or 3 icons and moving generated icons and their respective latent space representations between different tools via drag & drop.</p>
-    <br>
-    <menu>
-        <button onclick="document.getElementById('aboutDialog').close()">Close</button>
-    </menu>
-</dialog>
 
 
 <style>
     
-    .container {
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-    .container-content {
-        width: 448px;
-        height: 384px;
-        background-color: #051A33;
+    #home {
+        padding-top: 40%;
+        width: 100%;
+        background-position: center;
+        justify-content: center;
+        align-items: center;
+        display: grid;
     }
+
+    .main-container {
+        height: fit-content;
+        width: fit-content;
+        justify-content: center;
+    }
+
+    .container {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
 </style>

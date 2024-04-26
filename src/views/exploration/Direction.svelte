@@ -107,7 +107,7 @@ $: if (selected !== undefined && directionType !== undefined && explorer) {
     <div style="position: absolute; top: 10px; left: 10px;">
         <BusySpinner busy={busy || !explorer} time={100} />
     </div>
-    <div style="padding: 20px;">
+    <div style="padding-top: 10px;">
 {#each sideIndices as _, i}
     <canvas
         bind:this={canvas[i]}

@@ -4,7 +4,7 @@
     export let scale;
     export let ratio;
 
-    let internalScale = scale * ratio ?? 1;
+    let internalScale = $scale * ratio ?? 1;
 
 
     function onChange(e) {

@@ -18,10 +18,13 @@
             <NavItem>
                 <NavLink href='/about'>About</NavLink>
             </NavItem>
+            <NavItem>
+                <a class='nav-link' target="_blank" rel="noopener noreferrer" href='https://github.com/Akatuoro/icon-gan'>GitHub</a>
+            </NavItem>
         </Nav>
     </Collapse>
 </Navbar>
 
-<Container fluid>
+<Container fluid style="padding-top: 1rem;">
     <slot></slot>
 </Container>

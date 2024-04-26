@@ -15,7 +15,7 @@
 
     let exploration
 
-    const scale = writable(0.5)
+    const scale = writable(25)
 
     scale.subscribe(value => {
         if (!exploration) return
@@ -43,6 +43,7 @@
         elements.forEach((element) => element.props.exploration = exploration);
         elements = [...elements];
 
+        exploration.scale = $scale
         console.info('model loaded, update')
         exploration.update()
     })
