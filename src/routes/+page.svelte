@@ -41,9 +41,9 @@
 
 
 <style>
-    
+
     #home {
-        padding-top: 40%;
+        padding-top: 10rem;
         width: 100%;
         background-position: center;
         justify-content: center;
