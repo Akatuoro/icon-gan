@@ -1,8 +1,6 @@
 import { getBrowserSupport } from '$lib/browser-support';
 import { Exploration } from './exploration';
-import workerURL from './worker?url';
 import * as Comlink from 'comlink'
-// window.Comlink = Comlink
 
 
 let _useWorker
@@ -30,7 +28,11 @@ export const useWorker = () => {
 export const explore = async () => {
     if (useWorker()) {
         console.info('using worker')
-        const exploration = Comlink.wrap(new Worker(workerURL, {type: 'module'}))
+        const worker = new Worker(new URL('./worker.js', import.meta.url), {
+            type: 'module'
+        })
+        const exploration = Comlink.wrap(worker)
+
         return exploration
     }
     else {
