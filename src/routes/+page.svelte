@@ -3,11 +3,12 @@
     import BrowserSupport from "$lib/browser-support.svelte";
     import FancyButton from "$lib/components/FancyButton.svelte";
     import StickyFooter from "$lib/components/StickyFooter.svelte";
+    import { base } from "$app/paths";
 
     function load() {
         const overlay = document.getElementById("overlay")
         overlay.hidden = false
-        location.href = '/model'
+        location.href = base + '/model'
     }
 
 </script>
