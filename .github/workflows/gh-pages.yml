@@ -41,10 +41,12 @@ jobs:
         run: npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v4
+      - name: Copy entry page
+        # needed for refreshing the site on these routes
+        run: cp build/index.html build/model.html && cp build/index.html build/about.html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload dist folder
           path: './build'
       - name: Deploy to GitHub Pages
         id: deployment

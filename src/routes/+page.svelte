@@ -6,11 +6,8 @@
     import { base } from "$app/paths";
 
     function load() {
-        const overlay = document.getElementById("overlay")
-        overlay.hidden = false
         location.href = base + '/model'
     }
-
 </script>
 
 <div id="home">
